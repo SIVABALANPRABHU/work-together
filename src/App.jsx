@@ -64,7 +64,7 @@ function App() {
       const user = {
         ...userData,
         id: socket.id,
-        position: { x: 5, y: 5 },
+        position: { x: 15, y: 12 }, // Adjusted for larger grid
         room: currentRoom
       };
       setUser(user);
@@ -92,7 +92,7 @@ function App() {
   const handleRoomChange = (newRoom) => {
     setCurrentRoom(newRoom);
     if (user && socket) {
-      const newPosition = { x: 5, y: 5 };
+      const newPosition = { x: 15, y: 12 }; // Adjusted for larger grid
       const updatedUser = { ...user, position: newPosition, room: newRoom };
       setUser(updatedUser);
       socket.emit('user-move', {
@@ -122,8 +122,6 @@ function App() {
   return (
     <div className="office-container">
       <OfficeGrid 
-        layout={officeLayout} 
-        objects={officeObjects}
         currentRoom={currentRoom}
       />
       

@@ -19,7 +19,7 @@ const Character = ({ user, onMove, isCurrentUser }) => {
         case 'ArrowDown':
         case 's':
         case 'S':
-          newPos.y = Math.min(13, currentPos.y + 1);
+          newPos.y = Math.min(23, currentPos.y + 1); // Updated for larger grid
           break;
         case 'ArrowLeft':
         case 'a':
@@ -29,7 +29,7 @@ const Character = ({ user, onMove, isCurrentUser }) => {
         case 'ArrowRight':
         case 'd':
         case 'D':
-          newPos.x = Math.min(18, currentPos.x + 1);
+          newPos.x = Math.min(28, currentPos.x + 1); // Updated for larger grid
           break;
         default:
           return;
@@ -67,8 +67,8 @@ const Character = ({ user, onMove, isCurrentUser }) => {
       ref={characterRef}
       className="character"
       style={{
-        left: `${user.position.x * 5}%`,
-        top: `${user.position.y * 6.67}%`,
+        left: `${user.position.x * 3.33}%`, // Updated for new grid size
+        top: `${user.position.y * 4}%`, // Updated for new grid size
         backgroundColor: getAvatarColor(user.avatar),
         border: isCurrentUser ? '3px solid #64FFDA' : '2px solid #ffffff'
       }}

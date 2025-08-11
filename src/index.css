@@ -20,27 +20,25 @@ body {
 
 .office-grid {
   display: grid;
-  grid-template-columns: repeat(20, 1fr);
-  grid-template-rows: repeat(15, 1fr);
   width: 100%;
   height: 100%;
-  gap: 1px;
+  position: relative;
 }
 
 .office-tile {
-  background: #1e1e3f;
-  border: 1px solid #2d2d5f;
-  transition: all 0.2s ease;
-}
-
-.office-tile:hover {
-  background: #2d2d5f;
-  border-color: #4a4a8a;
+  min-height: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .office-tile.wall {
-  background: #2d2d5f;
-  border-color: #4a4a8a;
+  background: linear-gradient(135deg, #8B7355, #A0522D);
+  border: 2px solid #654321;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.office-tile.floor {
+  background: linear-gradient(135deg, #F5F5DC, #DEB887);
+  border: 1px solid #D2B48C;
 }
 
 .office-tile.desk {
@@ -257,7 +255,11 @@ body {
 
 .office-objects {
   position: absolute;
-  z-index: 5;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .office-object {
@@ -265,38 +267,179 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  color: #64ffda;
-}
-
-.office-object.desk {
-  width: 60px;
-  height: 40px;
-  background: #3a3a5a;
-  border: 2px solid #5a5a7a;
   border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  cursor: pointer;
 }
 
-.office-object.chair {
+.office-object:hover {
+  transform: scale(1.05);
+  z-index: 15;
+  pointer-events: auto;
+}
+
+/* Desk Styles */
+.office-object.desk-wood {
+  background: linear-gradient(135deg, #8B4513, #A0522D);
+  border: 2px solid #654321;
+  color: #8B4513;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Chair Styles */
+.office-object.office-chair {
+  background: linear-gradient(135deg, #2F4F4F, #696969);
+  border: 2px solid #2F4F4F;
+  color: #F5F5F5;
+  border-radius: 50%;
   width: 30px;
   height: 30px;
-  background: #4a4a6a;
-  border: 2px solid #6a6a8a;
-  border-radius: 50%;
 }
 
-.office-object.plant {
+.office-object.conference-chair {
+  background: linear-gradient(135deg, #4169E1, #1E90FF);
+  border: 2px solid #4169E1;
+  color: #F5F5F5;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+}
+
+.office-object.lounge-chair {
+  background: linear-gradient(135deg, #FF6347, #FF4500);
+  border: 2px solid #FF6347;
+  color: #F5F5F5;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+}
+
+/* Kitchen Area */
+.office-object.kitchen-counter {
+  background: linear-gradient(135deg, #F5F5F5, #E0E0E0);
+  border: 2px solid #C0C0C0;
+  color: #696969;
+}
+
+.office-object.sink {
+  background: linear-gradient(135deg, #C0C0C0, #A0A0A0);
+  border: 2px solid #808080;
+  color: #F5F5F5;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+}
+
+.office-object.refrigerator {
+  background: linear-gradient(135deg, #F0F8FF, #E6E6FA);
+  border: 2px solid #B0C4DE;
+  color: #4169E1;
+}
+
+.office-object.coffee-machine {
+  background: linear-gradient(135deg, #8B4513, #A0522D);
+  border: 2px solid #654321;
+  color: #F5F5F5;
+}
+
+.office-object.microwave {
+  background: linear-gradient(135deg, #696969, #808080);
+  border: 2px solid #2F4F4F;
+  color: #F5F5F5;
+}
+
+/* Break Area */
+.office-object.lounge-sofa {
+  background: linear-gradient(135deg, #8B008B, #9932CC);
+  border: 2px solid #8B008B;
+  color: #F5F5F5;
+}
+
+.office-object.coffee-table {
+  background: linear-gradient(135deg, #8B4513, #A0522D);
+  border: 2px solid #654321;
+  color: #8B4513;
+}
+
+/* Decorative Elements */
+.office-object.plant-large {
+  background: linear-gradient(135deg, #228B22, #32CD32);
+  border: 2px solid #228B22;
+  color: #228B22;
+  border-radius: 50%;
   width: 40px;
   height: 40px;
-  background: #2d5a2d;
-  border: 2px solid #4a7a4a;
-  border-radius: 50%;
 }
 
-.office-object.coffee {
-  width: 30px;
-  height: 30px;
-  background: #8b4513;
-  border: 2px solid #a0522d;
-  border-radius: 50%;
+.office-object.window {
+  background: linear-gradient(135deg, #87CEEB, #98D8E8);
+  border: 2px solid #98D8E8;
+  color: #4169E1;
+}
+
+/* Meeting Area */
+.office-object.conference-table {
+  background: linear-gradient(135deg, #8B4513, #A0522D);
+  border: 2px solid #654321;
+  color: #8B4513;
+}
+
+/* Storage and Utilities */
+.office-object.filing-cabinet {
+  background: linear-gradient(135deg, #2F4F4F, #696969);
+  border: 2px solid #2F4F4F;
+  color: #F5F5F5;
+}
+
+.office-object.printer {
+  background: linear-gradient(135deg, #696969, #808080);
+  border: 2px solid #2F4F4F;
+  color: #F5F5F5;
+}
+
+.office-object.water-cooler {
+  background: linear-gradient(135deg, #F0F8FF, #E6E6FA);
+  border: 2px solid #B0C4DE;
+  color: #4169E1;
+}
+
+.office-object.coffee-station {
+  background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
+  border: 2px solid #654321;
+}
+
+.office-object.break-table {
+  background: linear-gradient(135deg, #8B7355 0%, #A0522D 100%);
+  border: 2px solid #654321;
+}
+
+.office-object.break-chair {
+  background: linear-gradient(135deg, #4169E1 0%, #1E90FF 100%);
+  border: 2px solid #000080;
+}
+
+.office-object.vending-machine {
+  background: linear-gradient(135deg, #696969 0%, #808080 100%);
+  border: 2px solid #2F4F4F;
+}
+
+.office-object.tree {
+  background: linear-gradient(135deg, #228B22 0%, #32CD32 100%);
+  border: 2px solid #006400;
+}
+
+.office-object.picnic-table {
+  background: linear-gradient(135deg, #8B7355 0%, #A0522D 100%);
+  border: 2px solid #654321;
+}
+
+.office-object.barrel {
+  background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
+  border: 2px solid #654321;
+}
+
+.office-object.parking-sign {
+  background: linear-gradient(135deg, #FF69B4 0%, #FF1493 100%);
+  border: 2px solid #C71585;
 }
