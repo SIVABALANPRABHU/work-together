@@ -19,7 +19,7 @@ const Character = ({ user, onMove, isCurrentUser }) => {
         case 'ArrowDown':
         case 's':
         case 'S':
-          newPos.y = Math.min(23, currentPos.y + 1); // Updated for larger grid
+          newPos.y = Math.min(23, currentPos.y + 1);
           break;
         case 'ArrowLeft':
         case 'a':
@@ -29,7 +29,7 @@ const Character = ({ user, onMove, isCurrentUser }) => {
         case 'ArrowRight':
         case 'd':
         case 'D':
-          newPos.x = Math.min(28, currentPos.x + 1); // Updated for larger grid
+          newPos.x = Math.min(28, currentPos.x + 1);
           break;
         default:
           return;
@@ -58,19 +58,17 @@ const Character = ({ user, onMove, isCurrentUser }) => {
     return colors[avatar] || '#64FFDA';
   };
 
-  const getInitials = (name) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
-  };
-
   return (
     <div
       ref={characterRef}
       className="character"
       style={{
-        left: `${user.position.x * 3.33}%`, // Updated for new grid size
-        top: `${user.position.y * 4}%`, // Updated for new grid size
+        position: 'absolute',
+        left: `${user.position.x * 3.33}%`,
+        top: `${user.position.y * 4}%`,
         backgroundColor: getAvatarColor(user.avatar),
-        border: isCurrentUser ? '3px solid #64FFDA' : '2px solid #ffffff'
+        border: isCurrentUser ? '3px solid #64FFDA' : '2px solid #ffffff',
+        zIndex: 1000
       }}
       title={user.name}
     >

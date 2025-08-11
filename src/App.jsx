@@ -64,7 +64,7 @@ function App() {
       const user = {
         ...userData,
         id: socket.id,
-        position: { x: 15, y: 12 }, // Adjusted for larger grid
+        position: { x: 15, y: 12 }, // Adjusted for 30x25 grid
         room: currentRoom
       };
       setUser(user);
@@ -92,7 +92,7 @@ function App() {
   const handleRoomChange = (newRoom) => {
     setCurrentRoom(newRoom);
     if (user && socket) {
-      const newPosition = { x: 15, y: 12 }; // Adjusted for larger grid
+      const newPosition = { x: 15, y: 12 }; // Adjusted for 30x25 grid
       const updatedUser = { ...user, position: newPosition, room: newRoom };
       setUser(updatedUser);
       socket.emit('user-move', {
@@ -121,27 +121,26 @@ function App() {
 
   return (
     <div className="office-container">
-      <OfficeGrid 
-        currentRoom={currentRoom}
-      />
+      <OfficeGrid currentRoom={currentRoom}>
+        {/* Characters are now rendered inside the zoomable OfficeGrid */}
+        {user && (
+          <Character 
+            user={user}
+            onMove={handleMove}
+            isCurrentUser={true}
+          />
+        )}
+        
+        {users.map(user => (
+          <Character 
+            key={user.id}
+            user={user}
+            onMove={() => {}}
+            isCurrentUser={false}
+          />
+        ))}
+      </OfficeGrid>
       
-      {user && (
-        <Character 
-          user={user}
-          onMove={handleMove}
-          isCurrentUser={true}
-        />
-      )}
-      
-      {users.map(user => (
-        <Character 
-          key={user.id}
-          user={user}
-          onMove={() => {}}
-          isCurrentUser={false}
-        />
-      ))}
-
       {showControls && (
         <Controls 
           onJoinOffice={handleJoinOffice}
