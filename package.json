@@ -1,0 +1,32 @@
+{
+  "name": "virtual-office",
+  "version": "1.0.0",
+  "description": "A virtual office application similar to Gather with movable characters and real office environments",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vite": "^4.4.9"
+  },
+  "keywords": [
+    "virtual-office",
+    "gather-clone",
+    "remote-work",
+    "collaboration"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
