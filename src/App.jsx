@@ -22,6 +22,8 @@ function App() {
   const [dmPeerId, setDmPeerId] = useState(null);
   const [unreadByUserId, setUnreadByUserId] = useState({});
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
 
   // Fetch account profile when token exists (name, avatar)
   useEffect(() => {
@@ -144,6 +146,18 @@ function App() {
 
   // Room history prefetch disabled in DM-first UI
 
+  // Close user menu on outside click
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!isUserMenuOpen) return;
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setIsUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [isUserMenuOpen]);
+
   const loadDmHistory = (peerUserId) => {
     const token = localStorage.getItem('token');
     if (!token || !peerUserId) return;
@@ -233,23 +247,37 @@ function App() {
 
   return (
     <div className="office-container">
-      <div style={{ position: 'fixed', top: 12, right: 12, color: '#b0b0b0', display: 'flex', alignItems: 'center', gap: 8, zIndex: 10000 }}>
-        <div style={{ background: '#1e1e3f', border: '1px solid #2d2d5f', borderRadius: 16, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 16 }}>{account?.avatar || localStorage.getItem('user_avatar') || '👤'}</span>
-          <span style={{ fontWeight: 600, color: '#fff' }}>{account?.name || localStorage.getItem('user_name') || 'User'}</span>
-        </div>
+      <div ref={userMenuRef} style={{ position: 'fixed', top: 12, right: 12, zIndex: 12000 }}>
         <button
-          className="btn"
-          onClick={() => {
-            try { socket?.disconnect(); } catch {}
-            localStorage.removeItem('token');
-            localStorage.removeItem('user_name');
-            localStorage.removeItem('user_avatar');
-            window.location.reload();
-          }}
+          className="user-menu-button"
+          aria-label="User menu"
+          onClick={() => setIsUserMenuOpen(o => !o)}
+          title={account?.name || 'Account'}
         >
-          Logout
+          <span style={{ fontSize: 18 }}>{account?.avatar || localStorage.getItem('user_avatar') || '👤'}</span>
         </button>
+        {isUserMenuOpen && (
+          <div className="user-menu">
+            <div className="user-menu-header">
+              <div className="user-menu-avatar">{account?.avatar || '👤'}</div>
+              <div className="user-menu-name">{account?.name || 'User'}</div>
+              {account?.email && (<div className="user-menu-email">{account.email}</div>)}
+            </div>
+            <div className="user-menu-actions">
+              <button className="user-menu-item" onClick={() => setIsUserMenuOpen(false)}>Profile</button>
+              <button
+                className="user-menu-item danger"
+                onClick={() => {
+                  try { socket?.disconnect(); } catch {}
+                  localStorage.removeItem('token');
+                  localStorage.removeItem('user_name');
+                  localStorage.removeItem('user_avatar');
+                  window.location.reload();
+                }}
+              >Logout</button>
+            </div>
+          </div>
+        )}
       </div>
       <OfficeGrid currentRoom={currentRoom}>
         {/* Characters are now rendered inside the zoomable OfficeGrid */}
