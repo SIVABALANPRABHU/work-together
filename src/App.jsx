@@ -16,6 +16,35 @@ function App() {
   const [currentRoom, setCurrentRoom] = useState('main-office');
   const [isConnected, setIsConnected] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [account, setAccount] = useState(null);
+
+  // Fetch account profile when token exists (name, avatar)
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setAccount(null);
+      return;
+    }
+    fetch('http://localhost:5000/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('unauthorized');
+        return res.json();
+      })
+      .then(({ user }) => {
+        setAccount(user);
+        if (user?.name) localStorage.setItem('user_name', user.name);
+        if (user?.avatar) localStorage.setItem('user_avatar', user.avatar);
+      })
+      .catch(() => {
+        // token invalid; force logout
+        localStorage.removeItem('token');
+        localStorage.removeItem('user_name');
+        localStorage.removeItem('user_avatar');
+        setAccount(null);
+      });
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -69,12 +98,18 @@ function App() {
 
   const handleJoinOffice = (userData) => {
     if (socket) {
+      const chosenAvatar = userData.avatar || account?.avatar || localStorage.getItem('user_avatar') || '👨';
+      const displayName = userData.name || account?.name || localStorage.getItem('user_name') || 'Guest';
       const user = {
         ...userData,
+        name: displayName,
+        avatar: chosenAvatar,
         id: socket.id,
         position: { x: 15, y: 12 }, // Adjusted for 30x25 grid
         room: currentRoom
       };
+      // persist avatar for future sessions
+      localStorage.setItem('user_avatar', chosenAvatar);
       setUser(user);
       socket.emit('join-office', user);
     }
@@ -137,21 +172,24 @@ function App() {
 
   return (
     <div className="office-container">
-      {!user && (
-        <div style={{ position: 'fixed', top: 12, right: 12, color: '#b0b0b0' }}>
-          Logged in as {localStorage.getItem('user_name')}
-          <button
-            style={{ marginLeft: 8 }}
-            onClick={() => {
-              localStorage.removeItem('token');
-              localStorage.removeItem('user_name');
-              window.location.reload();
-            }}
-          >
-            Logout
-          </button>
+      <div style={{ position: 'fixed', top: 12, right: 12, color: '#b0b0b0', display: 'flex', alignItems: 'center', gap: 8, zIndex: 10000 }}>
+        <div style={{ background: '#1e1e3f', border: '1px solid #2d2d5f', borderRadius: 16, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>{account?.avatar || localStorage.getItem('user_avatar') || '👤'}</span>
+          <span style={{ fontWeight: 600, color: '#fff' }}>{account?.name || localStorage.getItem('user_name') || 'User'}</span>
         </div>
-      )}
+        <button
+          className="btn"
+          onClick={() => {
+            try { socket?.disconnect(); } catch {}
+            localStorage.removeItem('token');
+            localStorage.removeItem('user_name');
+            localStorage.removeItem('user_avatar');
+            window.location.reload();
+          }}
+        >
+          Logout
+        </button>
+      </div>
       <OfficeGrid currentRoom={currentRoom}>
         {/* Characters are now rendered inside the zoomable OfficeGrid */}
         {user && (
@@ -180,6 +218,7 @@ function App() {
           onRoomChange={handleRoomChange}
           currentRoom={currentRoom}
           user={user}
+          account={account}
         />
       )}
 

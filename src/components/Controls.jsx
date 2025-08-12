@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 
-const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user }) => {
+const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user, account }) => {
   const [formData, setFormData] = useState({
-    name: localStorage.getItem('user_name') || '',
-    avatar: '👨'
+    name: account?.name || localStorage.getItem('user_name') || '',
+    avatar: account?.avatar || localStorage.getItem('user_avatar') || '👨'
   });
 
   const avatars = ['👨', '👩', '👦', '👧', '🧑', '👴', '👵', '🤖'];

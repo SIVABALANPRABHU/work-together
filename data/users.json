@@ -15,6 +15,14 @@
       "password_hash": "$2a$10$FmFGU9/rtkN/fvhU5Jt3KuZdoaTCH.Pk5iki/i4C6BiBawdb3dVIq",
       "avatar": "👨",
       "created_at": "2025-08-12T08:00:05.705Z"
+    },
+    {
+      "id": "u_1754988674671_sa8m69",
+      "email": "guru@gmail.com",
+      "name": "guru",
+      "password_hash": "$2a$10$F/bkrNC6c9xu.xsnmJGRoOUfkaDKJNec/PJ91y3c.D.TjDzGR3IoW",
+      "avatar": "👧",
+      "created_at": "2025-08-12T08:51:14.671Z"
     }
   ]
 }
