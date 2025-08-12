@@ -56,6 +56,28 @@
       "toAvatar": "🤖",
       "message": "hi student",
       "timestamp": "2025-08-12T09:55:30.815Z"
+    },
+    {
+      "fromSocketId": "tWWEqM3B5MET9U-fAAAf",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754985605705_fxi34f",
+      "toName": "sky",
+      "toAvatar": "👨",
+      "message": "hi",
+      "timestamp": "2025-08-12T12:01:39.221Z"
+    },
+    {
+      "fromSocketId": "tWWEqM3B5MET9U-fAAAf",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754985605705_fxi34f",
+      "toName": "sky",
+      "toAvatar": "👨",
+      "message": "what are you doing now",
+      "timestamp": "2025-08-12T12:01:58.449Z"
     }
   ],
   "u_1754985565053_bqwtnt__u_1754988674671_sa8m69": [
@@ -69,6 +91,17 @@
       "toAvatar": "🤖",
       "message": "im guru",
       "timestamp": "2025-08-12T09:54:22.733Z"
+    },
+    {
+      "fromSocketId": "tWWEqM3B5MET9U-fAAAf",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754988674671_sa8m69",
+      "toName": "guru",
+      "toAvatar": "👧",
+      "message": "hi",
+      "timestamp": "2025-08-12T11:54:42.758Z"
     }
   ]
 }

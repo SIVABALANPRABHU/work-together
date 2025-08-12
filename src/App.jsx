@@ -20,6 +20,7 @@ function App() {
   const [account, setAccount] = useState(null);
   const [directory, setDirectory] = useState([]); // all registered users
   const [dmPeerId, setDmPeerId] = useState(null);
+  const [unreadByUserId, setUnreadByUserId] = useState({});
 
   // Fetch account profile when token exists (name, avatar)
   useEffect(() => {
@@ -116,12 +117,18 @@ function App() {
         const thread = prev[otherId] || [];
         return { ...prev, [otherId]: [...thread, message] };
       });
+      const myId = account?.id;
+      const otherId = message.fromUserId === myId ? message.toUserId : message.fromUserId;
+      const isActiveThread = otherId === dmPeerId;
+      if (!isActiveThread || document.visibilityState !== 'visible') {
+        setUnreadByUserId((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+      }
     };
     socket.on('new-direct-message', onDirect);
     return () => {
       socket.off('new-direct-message', onDirect);
     };
-  }, [socket, account?.id]);
+  }, [socket, account?.id, dmPeerId]);
 
   // Auto-select first user from directory if none selected
   useEffect(() => {
@@ -288,10 +295,13 @@ function App() {
           currentUser={user}
           account={account}
           users={directory.filter(u => u.id !== account?.id)}
+          dmThreads={dmMessages}
+          unreadByUserId={unreadByUserId}
           dmPeerId={dmPeerId}
           onSelectPeer={(peerId) => {
             setDmPeerId(peerId);
             loadDmHistory(peerId);
+            setUnreadByUserId(prev => ({ ...prev, [peerId]: 0 }));
           }}
         />
       )}
