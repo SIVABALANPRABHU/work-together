@@ -339,47 +339,42 @@ body {
 
 .controls {
   position: fixed;
-  top: 20px;
-  left: 20px;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.8);
-  padding: 20px;
-  border-radius: 12px;
+  top: max(16px, calc(env(safe-area-inset-top) + 12px));
+  left: max(16px, env(safe-area-inset-left));
+  z-index: 11000;
+  background: rgba(10, 12, 11, 0.75);
+  padding: 14px 16px;
+  border-radius: 14px;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(245,158,11,0.25);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
 }
 
 .controls h3 {
-  margin-bottom: 15px;
-  color: #64ffda;
+  margin-bottom: 10px;
+  color: #F3F4F6;
 }
 
-.control-group {
-  margin-bottom: 15px;
-}
+.control-group { margin-bottom: 12px; }
 
-.control-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 14px;
-  color: #b0b0b0;
-}
+.control-group label { display: block; margin-bottom: 6px; font-size: 13px; color: #D1D5DB; }
 
 .control-group input,
 .control-group select {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #2d2d5f;
-  border-radius: 6px;
-  background: #1e1e3f;
-  color: white;
+  padding: 10px 12px;
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 10px;
+  background: #1C1815;
+  color: #F9FAFB;
   font-size: 14px;
 }
 
 .control-group input:focus,
 .control-group select:focus {
   outline: none;
-  border-color: #64ffda;
+  border-color: #F59E0B;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.15);
 }
 
 .btn {

@@ -301,15 +301,15 @@ function App() {
           ))}
       </OfficeGrid>
       
-      {showControls && (
-        <Controls 
-          onJoinOffice={handleJoinOffice}
-          onRoomChange={handleRoomChange}
-          currentRoom={currentRoom}
-          user={user}
-          account={account}
-        />
-      )}
+      <Controls 
+        onJoinOffice={handleJoinOffice}
+        onRoomChange={handleRoomChange}
+        currentRoom={currentRoom}
+        user={user}
+        account={account}
+        collapsed={!showControls}
+        onToggle={() => setShowControls((v) => !v)}
+      />
 
       <RoomInfo 
         currentRoom={currentRoom}
@@ -358,26 +358,7 @@ function App() {
         >💬</button>
       )}
 
-      <button 
-        onClick={() => setShowControls(!showControls)}
-        style={{
-          position: 'fixed',
-          bottom: '20px',
-          left: '20px',
-          zIndex: 100,
-          background: '#64ffda',
-          color: '#0f0f23',
-          border: 'none',
-          padding: '10px',
-          borderRadius: '50%',
-          width: '50px',
-          height: '50px',
-          cursor: 'pointer',
-          fontSize: '20px'
-        }}
-      >
-        {showControls ? '×' : '⚙'}
-      </button>
+      
     </div>
   );
 }

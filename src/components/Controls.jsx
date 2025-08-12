@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user, account }) => {
+const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user, account, collapsed, onToggle }) => {
   const [formData, setFormData] = useState({
     name: account?.name || localStorage.getItem('user_name') || '',
     avatar: account?.avatar || localStorage.getItem('user_avatar') || '👨'
@@ -29,7 +29,12 @@ const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user, account }) =>
   if (user) {
     return (
       <div className="controls">
-        <h3>Office Controls</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <h3>Office Controls</h3>
+          <button className="panel-close" onClick={onToggle} aria-label={collapsed ? 'Open controls' : 'Close controls'}>{collapsed ? '⚙' : '✕'}</button>
+        </div>
+        {collapsed ? null : (
+        <>
         <div className="control-group">
           <label>Current Room:</label>
           <select 
@@ -57,13 +62,19 @@ const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user, account }) =>
             {user.name} ({user.avatar})
           </p>
         </div>
+        </>
+        )}
       </div>
     );
   }
 
   return (
     <div className="controls">
-      <h3>Join Virtual Office</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <h3>Join Virtual Office</h3>
+        <button className="panel-close" onClick={onToggle} aria-label={collapsed ? 'Open controls' : 'Close controls'}>{collapsed ? '⚙' : '✕'}</button>
+      </div>
+      {collapsed ? null : (
       <form onSubmit={handleSubmit}>
         <div className="control-group">
           <label htmlFor="name">Your Name:</label>
@@ -98,6 +109,7 @@ const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user, account }) =>
           Enter Office
         </button>
       </form>
+      )}
     </div>
   );
 };
