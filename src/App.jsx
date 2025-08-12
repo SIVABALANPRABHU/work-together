@@ -131,14 +131,16 @@ function App() {
           />
         )}
         
-        {users.map(user => (
-          <Character 
-            key={user.id}
-            user={user}
-            onMove={() => {}}
-            isCurrentUser={false}
-          />
-        ))}
+        {users
+          .filter(u => u.room === currentRoom)
+          .map(user => (
+            <Character 
+              key={user.id}
+              user={user}
+              onMove={() => {}}
+              isCurrentUser={false}
+            />
+          ))}
       </OfficeGrid>
       
       {showControls && (

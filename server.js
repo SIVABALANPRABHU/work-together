@@ -52,19 +52,35 @@ io.on('connection', (socket) => {
   socket.on('user-move', (data) => {
     const user = connectedUsers.get(socket.id);
     if (user) {
+      const oldRoom = user.room;
       user.position = data.position;
       user.room = data.room;
-      
-      // Join new room if changed
-      socket.leave(user.room);
-      socket.join(data.room);
-      
-      // Broadcast movement to room
-      io.to(data.room).emit('user-moved', {
-        id: socket.id,
-        position: data.position,
-        room: data.room
-      });
+
+      // If room changed, move socket between rooms and notify both rooms
+      if (oldRoom !== data.room) {
+        if (oldRoom) {
+          socket.leave(oldRoom);
+          io.to(oldRoom).emit('user-left', socket.id);
+        }
+        socket.join(data.room);
+        io.to(data.room).emit('user-joined', {
+          id: socket.id,
+          name: user.name,
+          avatar: user.avatar,
+          position: data.position,
+          room: data.room
+        });
+        // Send current users in the new room to the switching user
+        const roomUsers = Array.from(connectedUsers.values()).filter(u => u.room === data.room && u.id !== socket.id);
+        socket.emit('room-users', roomUsers);
+      } else {
+        // Broadcast movement to current room
+        io.to(data.room).emit('user-moved', {
+          id: socket.id,
+          position: data.position,
+          room: data.room
+        });
+      }
     }
   });
 
