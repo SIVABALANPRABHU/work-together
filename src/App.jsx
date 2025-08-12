@@ -12,11 +12,14 @@ function App() {
   const [socket, setSocket] = useState(null);
   const [user, setUser] = useState(null);
   const [users, setUsers] = useState([]);
-  const [messages, setMessages] = useState([]);
+  const [roomMessages, setRoomMessages] = useState([]);
+  const [dmMessages, setDmMessages] = useState({}); // { [peerUserId]: Message[] }
   const [currentRoom, setCurrentRoom] = useState('main-office');
   const [isConnected, setIsConnected] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [account, setAccount] = useState(null);
+  const [directory, setDirectory] = useState([]); // all registered users
+  const [dmPeerId, setDmPeerId] = useState(null);
 
   // Fetch account profile when token exists (name, avatar)
   useEffect(() => {
@@ -25,7 +28,7 @@ function App() {
       setAccount(null);
       return;
     }
-    fetch('http://localhost:5000/api/auth/me', {
+    fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(async (res) => {
@@ -44,6 +47,14 @@ function App() {
         localStorage.removeItem('user_avatar');
         setAccount(null);
       });
+  }, []);
+
+  // Load user directory
+  useEffect(() => {
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(({ users }) => setDirectory(users || []))
+      .catch(() => setDirectory([]));
   }, []);
 
   useEffect(() => {
@@ -67,34 +78,74 @@ function App() {
       console.log('Disconnected from server');
     });
 
-    newSocket.on('user-joined', (newUser) => {
-      setUsers(prev => [...prev.filter(u => u.id !== newUser.id), newUser]);
-    });
-
-    newSocket.on('user-left', (userId) => {
-      setUsers(prev => prev.filter(u => u.id !== userId));
-    });
-
-    newSocket.on('user-moved', (userData) => {
-      setUsers(prev => prev.map(u => 
-        u.id === userData.id 
-          ? { ...u, position: userData.position, room: userData.room }
-          : u
-      ));
-    });
-
-    newSocket.on('room-users', (roomUsers) => {
-      setUsers(roomUsers.filter(u => u.id !== newSocket.id));
-    });
-
-    newSocket.on('new-message', (message) => {
-      setMessages(prev => [...prev, message]);
-    });
-
     return () => {
       newSocket.close();
     };
   }, []);
+
+  // Socket: presence and movement handlers
+  useEffect(() => {
+    if (!socket) return;
+    const onJoined = (newUser) => setUsers(prev => [...prev.filter(u => u.id !== newUser.id), newUser]);
+    const onLeft = (userId) => setUsers(prev => prev.filter(u => u.id !== userId));
+    const onMoved = (userData) => setUsers(prev => prev.map(u => u.id === userData.id ? { ...u, position: userData.position, room: userData.room } : u));
+    const onRoomUsers = (roomUsers) => setUsers(roomUsers.filter(u => u.id !== socket.id));
+
+    socket.on('user-joined', onJoined);
+    socket.on('user-left', onLeft);
+    socket.on('user-moved', onMoved);
+    socket.on('room-users', onRoomUsers);
+
+    return () => {
+      socket.off('user-joined', onJoined);
+      socket.off('user-left', onLeft);
+      socket.off('user-moved', onMoved);
+      socket.off('room-users', onRoomUsers);
+    };
+  }, [socket]);
+
+  // Room messages listener disabled in DM-first UI
+
+  // Socket: direct messages
+  useEffect(() => {
+    if (!socket) return;
+    const onDirect = (message) => {
+      setDmMessages((prev) => {
+        const myId = account?.id;
+        const otherId = message.fromUserId === myId ? message.toUserId : message.fromUserId;
+        const thread = prev[otherId] || [];
+        return { ...prev, [otherId]: [...thread, message] };
+      });
+    };
+    socket.on('new-direct-message', onDirect);
+    return () => {
+      socket.off('new-direct-message', onDirect);
+    };
+  }, [socket, account?.id]);
+
+  // Auto-select first user from directory if none selected
+  useEffect(() => {
+    if (!dmPeerId && directory.length > 0) {
+      const first = directory.find(u => u.id !== account?.id) || directory[0];
+      if (first?.id) {
+        setDmPeerId(first.id);
+        loadDmHistory(first.id);
+      }
+    }
+  }, [directory, account?.id]);
+
+  // Room history prefetch disabled in DM-first UI
+
+  const loadDmHistory = (peerUserId) => {
+    const token = localStorage.getItem('token');
+    if (!token || !peerUserId) return;
+    fetch(`/api/chat/dm/${encodeURIComponent(peerUserId)}?limit=200`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => res.json())
+      .then(({ messages }) => setDmMessages(prev => ({ ...prev, [peerUserId]: messages || [] })))
+      .catch(() => setDmMessages(prev => ({ ...prev, [peerUserId]: [] })));
+  };
 
   const handleJoinOffice = (userData) => {
     if (socket) {
@@ -128,7 +179,9 @@ function App() {
 
   const handleSendMessage = (message) => {
     if (socket) {
-      socket.emit('send-message', { message });
+      if (dmPeerId) {
+        socket.emit('send-direct-message', { toUserId: dmPeerId, message });
+      }
     }
   };
 
@@ -230,9 +283,16 @@ function App() {
 
       {user && (
         <ChatPanel 
-          messages={messages}
+          messages={dmMessages[dmPeerId] || []}
           onSendMessage={handleSendMessage}
           currentUser={user}
+          account={account}
+          users={directory.filter(u => u.id !== account?.id)}
+          dmPeerId={dmPeerId}
+          onSelectPeer={(peerId) => {
+            setDmPeerId(peerId);
+            loadDmHistory(peerId);
+          }}
         />
       )}
 

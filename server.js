@@ -23,11 +23,19 @@ app.use(express.static(path.join(__dirname, 'dist')));
 // --- Simple JSON file store for user accounts (no native build needed) ---
 const dataDir = path.join(__dirname, 'data');
 const usersFile = path.join(dataDir, 'users.json');
+const roomMessagesFile = path.join(dataDir, 'messages_rooms.json');
+const dmMessagesFile = path.join(dataDir, 'messages_dm.json');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir);
 }
 if (!fs.existsSync(usersFile)) {
   fs.writeFileSync(usersFile, JSON.stringify({ users: [] }, null, 2));
+}
+if (!fs.existsSync(roomMessagesFile)) {
+  fs.writeFileSync(roomMessagesFile, JSON.stringify({}, null, 2));
+}
+if (!fs.existsSync(dmMessagesFile)) {
+  fs.writeFileSync(dmMessagesFile, JSON.stringify({}, null, 2));
 }
 
 function readUsers() {
@@ -123,6 +131,65 @@ app.get('/api/auth/me', (req, res) => {
   return res.json({ user: { id: user.id, email: user.email, name: user.name, avatar: user.avatar } });
 });
 
+// --- Utility: messages storage ---
+function readRoomMessages() {
+  try {
+    return JSON.parse(fs.readFileSync(roomMessagesFile, 'utf8')) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function writeRoomMessages(map) {
+  fs.writeFileSync(roomMessagesFile, JSON.stringify(map, null, 2));
+}
+
+function readDmMessages() {
+  try {
+    return JSON.parse(fs.readFileSync(dmMessagesFile, 'utf8')) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function writeDmMessages(map) {
+  fs.writeFileSync(dmMessagesFile, JSON.stringify(map, null, 2));
+}
+
+function conversationKey(userIdA, userIdB) {
+  return [String(userIdA), String(userIdB)].sort().join('__');
+}
+
+// --- Public user directory (sanitized) ---
+app.get('/api/users', (req, res) => {
+  const users = readUsers().map(u => ({ id: u.id, name: u.name, avatar: u.avatar || '👤' }));
+  res.json({ users });
+});
+
+// --- Chat history endpoints ---
+app.get('/api/chat/room/:roomId', (req, res) => {
+  const payload = verifyAuthHeader(req);
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+  const { roomId } = req.params;
+  const limit = Math.min(parseInt(req.query.limit || '200', 10) || 200, 1000);
+  const map = readRoomMessages();
+  const list = Array.isArray(map[roomId]) ? map[roomId] : [];
+  const start = Math.max(0, list.length - limit);
+  return res.json({ messages: list.slice(start) });
+});
+
+app.get('/api/chat/dm/:peerUserId', (req, res) => {
+  const payload = verifyAuthHeader(req);
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+  const { peerUserId } = req.params;
+  const limit = Math.min(parseInt(req.query.limit || '200', 10) || 200, 1000);
+  const key = conversationKey(payload.userId, peerUserId);
+  const map = readDmMessages();
+  const list = Array.isArray(map[key]) ? map[key] : [];
+  const start = Math.max(0, list.length - limit);
+  return res.json({ messages: list.slice(start) });
+});
+
 // Store connected users
 const connectedUsers = new Map();
 
@@ -212,13 +279,69 @@ io.on('connection', (socket) => {
   socket.on('send-message', (messageData) => {
     const user = connectedUsers.get(socket.id);
     if (user) {
-      io.to(user.room).emit('new-message', {
+      const payload = {
         id: socket.id,
+        userId: user.userId,
         name: user.name,
+        avatar: user.avatar,
+        room: user.room,
         message: messageData.message,
         timestamp: new Date().toISOString()
-      });
+      };
+      // Persist to room history (cap to last 500)
+      const map = readRoomMessages();
+      if (!Array.isArray(map[user.room])) map[user.room] = [];
+      map[user.room].push(payload);
+      if (map[user.room].length > 500) map[user.room] = map[user.room].slice(-500);
+      writeRoomMessages(map);
+
+      io.to(user.room).emit('new-message', payload);
     }
+  });
+
+  // Handle direct messages (DMs)
+  socket.on('send-direct-message', (dmData) => {
+    const sender = connectedUsers.get(socket.id);
+    const toUserId = dmData?.toUserId;
+    const text = dmData?.message;
+    if (!sender || !toUserId || !text || !String(text).trim()) return;
+
+    const senderProfile = findUserById(sender.userId) || { name: sender.name, avatar: sender.avatar };
+    const recipientProfile = findUserById(toUserId) || { name: 'Unknown', avatar: '👤' };
+    const timestamp = new Date().toISOString();
+
+    const message = {
+      fromSocketId: socket.id,
+      fromUserId: sender.userId,
+      fromName: senderProfile.name,
+      fromAvatar: senderProfile.avatar,
+      toUserId,
+      toName: recipientProfile.name,
+      toAvatar: recipientProfile.avatar,
+      message: text,
+      timestamp
+    };
+
+    // Persist
+    const key = conversationKey(sender.userId, toUserId);
+    const dmMap = readDmMessages();
+    if (!Array.isArray(dmMap[key])) dmMap[key] = [];
+    dmMap[key].push(message);
+    if (dmMap[key].length > 500) dmMap[key] = dmMap[key].slice(-500);
+    writeDmMessages(dmMap);
+
+    // Deliver to recipient sockets (if online)
+    const targetSocketIds = Array.from(connectedUsers.entries())
+      .filter(([sid, u]) => u.userId === toUserId)
+      .map(([sid]) => sid);
+    if (targetSocketIds.length > 0) {
+      io.to(targetSocketIds).emit('new-direct-message', message);
+    }
+    // Also echo to sender (for consistency across multiple tabs)
+    const senderSocketIds = Array.from(connectedUsers.entries())
+      .filter(([sid, u]) => u.userId === sender.userId)
+      .map(([sid]) => sid);
+    io.to(senderSocketIds).emit('new-direct-message', message);
   });
 
   // Handle disconnection

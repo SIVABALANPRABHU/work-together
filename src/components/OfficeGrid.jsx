@@ -78,7 +78,7 @@ const OfficeGrid = ({ currentRoom, children }) => {
     switch (obj.type) {
       case 'desk-wood':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object desk-wood">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object desk-wood">
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '100%', position: 'relative' }}>
               <div style={{ fontSize: '14px', marginBottom: '1px' }}>🖥️</div>
               {obj.hasComputer && <div style={{ fontSize: '10px' }}>💻</div>}
@@ -97,119 +97,119 @@ const OfficeGrid = ({ currentRoom, children }) => {
       
       case 'office-chair':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object office-chair">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object office-chair">
             🪑
           </div>
         );
       
       case 'kitchen-counter':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object kitchen-counter">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object kitchen-counter">
             🍽️
           </div>
         );
       
       case 'sink':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object sink">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object sink">
             🚰
           </div>
         );
       
       case 'refrigerator':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object refrigerator">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object refrigerator">
             🧊
           </div>
         );
       
       case 'coffee-machine':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object coffee-machine">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object coffee-machine">
             ☕
           </div>
         );
       
       case 'microwave':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object microwave">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object microwave">
             🔥
           </div>
         );
       
       case 'lounge-sofa':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object lounge-sofa">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object lounge-sofa">
             🛋️
           </div>
         );
       
       case 'coffee-table':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object coffee-table">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object coffee-table">
             🫖
           </div>
         );
       
       case 'lounge-chair':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object lounge-chair">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object lounge-chair">
             🪑
           </div>
         );
       
       case 'plant-large':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object plant-large">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object plant-large">
             🌳
           </div>
         );
       
       case 'window':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object window">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object window">
             🪟
           </div>
         );
       
       case 'conference-table':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object conference-table">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object conference-table">
             🗣️
           </div>
         );
       
       case 'conference-chair':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object conference-chair">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object conference-chair">
             🪑
           </div>
         );
       
       case 'filing-cabinet':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object filing-cabinet">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object filing-cabinet">
             📁
           </div>
         );
       
       case 'printer':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object printer">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object printer">
             🖨️
           </div>
         );
       
       case 'water-cooler':
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object water-cooler">
+          <div key={`${obj.type}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object water-cooler">
             💧
           </div>
         );
       
       default:
         return (
-          <div key={`${obj.x}-${obj.y}`} style={baseStyle} className="office-object">
+          <div key={`${obj.type || 'obj'}-${obj.x}-${obj.y}`} style={baseStyle} className="office-object">
             📦
           </div>
         );

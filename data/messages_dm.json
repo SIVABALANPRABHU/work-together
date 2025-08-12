@@ -1,0 +1,74 @@
+{
+  "u_1754985605705_fxi34f__u_1754988674671_sa8m69": [
+    {
+      "fromSocketId": "7E7ATyDvCY022BTgAAAG",
+      "fromUserId": "u_1754988674671_sa8m69",
+      "fromName": "guru",
+      "fromAvatar": "👧",
+      "toUserId": "u_1754985605705_fxi34f",
+      "toName": "sky",
+      "toAvatar": "👨",
+      "message": "hi",
+      "timestamp": "2025-08-12T09:51:49.984Z"
+    },
+    {
+      "fromSocketId": "7E7ATyDvCY022BTgAAAG",
+      "fromUserId": "u_1754988674671_sa8m69",
+      "fromName": "guru",
+      "fromAvatar": "👧",
+      "toUserId": "u_1754985605705_fxi34f",
+      "toName": "sky",
+      "toAvatar": "👨",
+      "message": "hi sky",
+      "timestamp": "2025-08-12T09:52:36.801Z"
+    },
+    {
+      "fromSocketId": "I3pwk31nwLrLWXP2AAAJ",
+      "fromUserId": "u_1754985605705_fxi34f",
+      "fromName": "sky",
+      "fromAvatar": "👨",
+      "toUserId": "u_1754988674671_sa8m69",
+      "toName": "guru",
+      "toAvatar": "👧",
+      "message": "hi guru",
+      "timestamp": "2025-08-12T09:52:51.663Z"
+    }
+  ],
+  "u_1754985565053_bqwtnt__u_1754985605705_fxi34f": [
+    {
+      "fromSocketId": "I3pwk31nwLrLWXP2AAAJ",
+      "fromUserId": "u_1754985605705_fxi34f",
+      "fromName": "sky",
+      "fromAvatar": "👨",
+      "toUserId": "u_1754985565053_bqwtnt",
+      "toName": "Student",
+      "toAvatar": "🤖",
+      "message": "hi",
+      "timestamp": "2025-08-12T09:52:18.512Z"
+    },
+    {
+      "fromSocketId": "UYaxXc3hrl96EREEAAAM",
+      "fromUserId": "u_1754985605705_fxi34f",
+      "fromName": "sky",
+      "fromAvatar": "👨",
+      "toUserId": "u_1754985565053_bqwtnt",
+      "toName": "Student",
+      "toAvatar": "🤖",
+      "message": "hi student",
+      "timestamp": "2025-08-12T09:55:30.815Z"
+    }
+  ],
+  "u_1754985565053_bqwtnt__u_1754988674671_sa8m69": [
+    {
+      "fromSocketId": "7E7ATyDvCY022BTgAAAG",
+      "fromUserId": "u_1754988674671_sa8m69",
+      "fromName": "guru",
+      "fromAvatar": "👧",
+      "toUserId": "u_1754985565053_bqwtnt",
+      "toName": "Student",
+      "toAvatar": "🤖",
+      "message": "im guru",
+      "timestamp": "2025-08-12T09:54:22.733Z"
+    }
+  ]
+}
