@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
+import Auth from './components/Auth';
 import OfficeGrid from './components/OfficeGrid';
 import Character from './components/Character';
 import Controls from './components/Controls';
@@ -17,7 +18,14 @@ function App() {
   const [showControls, setShowControls] = useState(true);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:5000');
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setSocket(null);
+      return;
+    }
+    const newSocket = io('http://localhost:5000', {
+      auth: { token }
+    });
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
@@ -102,6 +110,14 @@ function App() {
     }
   };
 
+  if (!localStorage.getItem('token')) {
+    return (
+      <div className="office-container">
+        <Auth onAuthSuccess={() => setIsConnected(false)} />
+      </div>
+    );
+  }
+
   if (!isConnected) {
     return (
       <div className="office-container">
@@ -121,6 +137,21 @@ function App() {
 
   return (
     <div className="office-container">
+      {!user && (
+        <div style={{ position: 'fixed', top: 12, right: 12, color: '#b0b0b0' }}>
+          Logged in as {localStorage.getItem('user_name')}
+          <button
+            style={{ marginLeft: 8 }}
+            onClick={() => {
+              localStorage.removeItem('token');
+              localStorage.removeItem('user_name');
+              window.location.reload();
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      )}
       <OfficeGrid currentRoom={currentRoom}>
         {/* Characters are now rendered inside the zoomable OfficeGrid */}
         {user && (

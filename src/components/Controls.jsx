@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user }) => {
   const [formData, setFormData] = useState({
-    name: '',
+    name: localStorage.getItem('user_name') || '',
     avatar: '👨'
   });
 
@@ -15,9 +15,8 @@ const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (formData.name.trim()) {
-      onJoinOffice(formData);
-    }
+    if (!localStorage.getItem('token')) return;
+    if (formData.name.trim()) onJoinOffice(formData);
   };
 
   const handleInputChange = (e) => {
