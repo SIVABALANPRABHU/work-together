@@ -78,6 +78,28 @@
       "toAvatar": "👨",
       "message": "what are you doing now",
       "timestamp": "2025-08-12T12:01:58.449Z"
+    },
+    {
+      "fromSocketId": "Ztq6mpRyqHJmytrQAAAx",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754985605705_fxi34f",
+      "toName": "sky",
+      "toAvatar": "👨",
+      "message": "ji",
+      "timestamp": "2025-08-12T12:09:30.883Z"
+    },
+    {
+      "fromSocketId": "bo1Ri5rqDmN51DNhAABL",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754985605705_fxi34f",
+      "toName": "sky",
+      "toAvatar": "👨",
+      "message": "hiii",
+      "timestamp": "2025-08-12T12:22:05.208Z"
     }
   ],
   "u_1754985565053_bqwtnt__u_1754988674671_sa8m69": [

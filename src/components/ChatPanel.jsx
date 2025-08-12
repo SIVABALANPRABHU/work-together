@@ -58,6 +58,7 @@ const ChatPanel = ({
           <div style={{ padding: '10px' }}>
             <input
               type="text"
+              className="chat-search"
               placeholder="Search users…"
               onChange={(e) => {
                 const val = e.target.value.toLowerCase();
@@ -67,7 +68,6 @@ const ChatPanel = ({
                   el.style.display = name.includes(val) ? 'flex' : 'none';
                 });
               }}
-              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #2d2d5f', background: '#0f0f23', color: '#fff' }}
             />
           </div>
           <div style={{ overflowY: 'auto' }}>
@@ -105,7 +105,7 @@ const ChatPanel = ({
       ) : (
         <>
           <div className="chat-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button className="btn" onClick={() => onSelectPeer?.(null)} style={{ padding: '6px 10px' }}>Back</button>
+            <button className="back-btn" onClick={() => onSelectPeer?.(null)}><span style={{ marginRight: 6 }}>←</span>Back</button>
             <div style={{ fontWeight: 600 }}>
               {(() => {
                 const peer = users.find(u => u.id === dmPeerId);
