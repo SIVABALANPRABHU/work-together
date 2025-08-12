@@ -151,75 +151,64 @@ body {
 
 .zoom-controls {
   position: fixed;
-  top: 20px;
+  top: max(16px, calc(env(safe-area-inset-top) + 8px));
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.9);
-  padding: 12px 18px;
-  border-radius: 30px;
-  backdrop-filter: blur(15px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(10, 12, 11, 0.75);
+  padding: 8px 12px;
+  border-radius: 999px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(245, 158, 11, 0.25);
   display: flex;
   align-items: center;
-  gap: 12px;
-  z-index: 10000;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  gap: 8px;
+  z-index: 11000;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
 }
 
 .zoom-btn {
-  background: linear-gradient(135deg, #64ffda, #4cd6b3);
-  color: #0f0f23;
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  font-size: 18px;
-  font-weight: bold;
+  background: #1C1815;
+  color: #F9FAFB;
+  border: 1px solid rgba(245,158,11,0.25);
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 15px rgba(100, 255, 218, 0.3);
 }
 
-.zoom-btn:hover {
-  background: linear-gradient(135deg, #4cd6b3, #3bb8a0);
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(100, 255, 218, 0.4);
-}
+.zoom-btn:hover { background: rgba(245,158,11,0.15); border-color: #F59E0B; }
 
 .zoom-level {
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 600;
-  min-width: 55px;
+  color: #F3F4F6;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 48px;
   text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .reset-btn {
-  background: linear-gradient(135deg, #ff6b6b, #ff5252);
-  color: white;
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  background: #1C1815;
+  color: #F59E0B;
+  border: 1px solid rgba(245,158,11,0.25);
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
   font-size: 16px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
 }
 
-.reset-btn:hover {
-  background: linear-gradient(135deg, #ff5252, #ff3838);
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
-}
+.reset-btn:hover { background: rgba(245,158,11,0.15); border-color: #F59E0B; }
 
 .office-grid {
   display: grid;
@@ -594,26 +583,30 @@ body {
 
 .room-info {
   position: fixed;
-  top: 20px;
-  right: 20px;
-  background: rgba(0, 0, 0, 0.8);
-  padding: 15px;
-  border-radius: 12px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: max(16px, env(safe-area-inset-left));
+  z-index: 11000;
+  background: rgba(10, 12, 11, 0.75);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 14px;
+  padding: 10px 12px;
+  min-width: 260px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 100;
 }
 
-.room-info h3 {
-  color: #64ffda;
-  margin-bottom: 10px;
-}
+.ri-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.ri-title { display: inline-flex; align-items: center; gap: 8px; color: #F3F4F6; font-weight: 800; font-size: 14px; letter-spacing: 0.3px; }
+.ri-room-icon { filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35)); }
+.ri-status { font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 999px; }
+.ri-status.ok { background: rgba(16,185,129,0.18); color: #A7F3D0; border: 1px solid rgba(16,185,129,0.35); }
+.ri-status.down { background: rgba(239,68,68,0.18); color: #FECACA; border: 1px solid rgba(239,68,68,0.35); }
 
-.room-info p {
-  color: #b0b0b0;
-  font-size: 14px;
-  margin-bottom: 5px;
-}
+.ri-body { display: flex; align-items: center; gap: 10px; }
+.ri-item { display: inline-flex; align-items: center; gap: 6px; color: #E5E7EB; font-size: 13px; }
+.ri-item-icon { opacity: 0.9; }
+.ri-item-text { opacity: 0.95; }
+.ri-divider { width: 1px; height: 18px; background: rgba(255,255,255,0.15); }
 
 .office-objects {
   position: absolute;

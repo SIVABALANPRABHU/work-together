@@ -218,12 +218,12 @@ const OfficeGrid = ({ currentRoom, children }) => {
 
   return (
     <div className="office-grid-container">
-      {/* Zoom Controls */}
+      {/* Zoom Controls - docked to top center, compact with tooltip titles */}
       <div className="zoom-controls">
-        <button onClick={() => setZoom(Math.min(3, zoom + 0.2))} className="zoom-btn">+</button>
+        <button title="Zoom in" onClick={() => setZoom(Math.min(3, zoom + 0.2))} className="zoom-btn">+</button>
         <span className="zoom-level">{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom(Math.max(0.5, zoom - 0.2))} className="zoom-btn">−</button>
-        <button onClick={resetView} className="reset-btn">⌂</button>
+        <button title="Zoom out" onClick={() => setZoom(Math.max(0.5, zoom - 0.2))} className="zoom-btn">−</button>
+        <button title="Reset view" onClick={resetView} className="reset-btn">⌂</button>
       </div>
 
       {/* Office Grid with Characters */}
