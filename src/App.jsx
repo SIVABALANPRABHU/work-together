@@ -21,6 +21,7 @@ function App() {
   const [directory, setDirectory] = useState([]); // all registered users
   const [dmPeerId, setDmPeerId] = useState(null);
   const [unreadByUserId, setUnreadByUserId] = useState({});
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Fetch account profile when token exists (name, avatar)
   useEffect(() => {
@@ -288,7 +289,7 @@ function App() {
         isConnected={isConnected}
       />
 
-      {user && (
+      {user && isChatOpen && (
         <ChatPanel 
           messages={dmMessages[dmPeerId] || []}
           onSendMessage={handleSendMessage}
@@ -303,7 +304,30 @@ function App() {
             loadDmHistory(peerId);
             setUnreadByUserId(prev => ({ ...prev, [peerId]: 0 }));
           }}
+          onClose={() => setIsChatOpen(false)}
         />
+      )}
+
+      {user && !isChatOpen && (
+        <button
+          aria-label="Open chat"
+          onClick={() => setIsChatOpen(true)}
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            border: 'none',
+            background: '#F59E0B',
+            color: '#111111',
+            fontSize: 22,
+            cursor: 'pointer',
+            zIndex: 11000,
+            boxShadow: '0 10px 28px rgba(245,158,11,0.35)'
+          }}
+        >💬</button>
       )}
 
       <button 

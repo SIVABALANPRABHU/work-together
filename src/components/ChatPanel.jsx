@@ -52,10 +52,10 @@ const ChatPanel = ({
           <div className="chat-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>Chats</span>
             {onClose && (
-              <button className="btn" onClick={() => onClose?.()} style={{ padding: '6px 10px' }}>Close</button>
+              <button className="panel-close" onClick={() => onClose?.()} aria-label="Close chat">✕</button>
             )}
           </div>
-          <div style={{ padding: '10px' }}>
+          <div style={{ padding: '12px 15px 10px', borderBottom: '1px solid rgba(245,158,11,0.18)' }}>
             <input
               type="text"
               className="chat-search"
@@ -70,7 +70,7 @@ const ChatPanel = ({
               }}
             />
           </div>
-          <div style={{ overflowY: 'auto' }}>
+          <div style={{ overflowY: 'auto', padding: '0 15px 12px', flex: 1 }}>
             {users.map((u) => {
               const unread = unreadByUserId[u.id] || 0;
               return (
@@ -83,16 +83,17 @@ const ChatPanel = ({
                     width: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 10,
+                    gap: 12,
                     textAlign: 'left',
-                    padding: '12px 14px',
+                    padding: '12px 10px',
                     background: 'transparent',
                     border: 'none',
                     color: '#fff',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    borderRadius: 10
                   }}
                 >
-                  <span style={{ fontSize: 18 }}>{u.avatar || '👤'}</span>
+                  <span style={{ fontSize: 18, width: 26, textAlign: 'center' }}>{u.avatar || '👤'}</span>
                   <span style={{ fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
                   {unread > 0 && (
                     <span style={{ background: '#4F46E5', color: '#fff', borderRadius: 999, padding: '2px 6px', fontSize: 12, fontWeight: 700 }}>{unread}</span>
