@@ -38,6 +38,10 @@ function App() {
   const fsHideTimerRef = useRef(null);
   const [watchersBySharerId, setWatchersBySharerId] = useState({}); // { [sharerId]: [{id,name,avatar}] }
   const [fsViewersExpanded, setFsViewersExpanded] = useState(false);
+  const [minimizedSharerIds, setMinimizedSharerIds] = useState([]);
+
+  const addMinimizedSharer = (id) => setMinimizedSharerIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  const removeMinimizedSharer = (id) => setMinimizedSharerIds((prev) => prev.filter(x => x !== id));
   const [toasts, setToasts] = useState([]);
   const addToast = (text, type = 'info', ttlMs = 2800) => {
     const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -118,6 +122,23 @@ function App() {
     const top = 96; // below top bars
     ensureScreenTile(sharerId, (users.find(u => u.id === sharerId)?.name) || 'Screen');
     updateScreenTile(sharerId, { left, top, width, height, visible: true });
+  }
+
+  function dockScreenTileToAnchor(sharerId) {
+    try {
+      const el = document.getElementById(`nearby-card-${sharerId}`);
+      const width = 560;
+      const height = 340;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const left = Math.max(8, Math.round(rect.left + (rect.width / 2) - (width / 2)));
+        const top = Math.max(8, Math.round(rect.top + (rect.height / 2) - (height / 2)));
+        ensureScreenTile(sharerId, (users.find(u => u.id === sharerId)?.name) || 'Screen');
+        updateScreenTile(sharerId, { left, top, width, height, visible: true });
+        return;
+      }
+    } catch {}
+    dockScreenTileToTop(sharerId);
   }
 
   async function toggleScreenShare() {
@@ -676,8 +697,9 @@ function App() {
             top: 12,
             left: '50%',
             transform: 'translateX(-50%)',
-            display: 'flex',
-            gap: 10,
+            display: 'grid',
+            gridAutoFlow: 'column',
+            gap: 14,
             padding: 8,
             borderRadius: 12,
             background: 'rgba(17,17,17,0.6)',
@@ -688,38 +710,83 @@ function App() {
         >
               {nearbyUsers.map((u) => {
             const isSelected = activeSharerIds.includes(u.id);
+                const isMinimizedHere = isSelected && minimizedSharerIds.includes(u.id);
             return (
               <div
                 key={u.id}
                 id={`nearby-card-${u.id}`}
                 title={u.name}
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
+                  display: 'grid',
+                  gridTemplateColumns: isMinimizedHere ? undefined : '40px 1fr',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  minWidth: 68,
-                  padding: '8px 10px',
-                  borderRadius: 10,
+                  minWidth: isMinimizedHere ? 260 : 180,
+                  minHeight: isMinimizedHere ? 160 : undefined,
+                  padding: isMinimizedHere ? 8 : '10px 12px',
+                  borderRadius: 12,
                   border: isSelected ? '2px solid #64FFDA' : '1px solid rgba(255,255,255,0.18)',
                   background: isSelected ? 'rgba(100,255,218,0.12)' : 'rgba(255,255,255,0.06)',
-                  color: '#fff'
+                  color: '#fff',
+                  cursor: isSelected ? 'pointer' : 'default',
+                  overflow: 'hidden'
                 }}
+                    onClick={() => { if (isSelected && !isMinimizedHere) { setFullScreenSharerId(u.id); removeMinimizedSharer(u.id); } }}
               >
-                <span style={{ fontSize: 18 }}>{u.avatar || '👤'}</span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    marginTop: 4,
-                    maxWidth: 100,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontWeight: 600
-                  }}
-                >
-                  {u.name}
-                </span>
+                {isMinimizedHere ? (
+                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                    <video
+                      id={`screen-video-inline-${u.id}`}
+                      autoPlay
+                      muted
+                      playsInline
+                      style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', borderRadius: 8 }}
+                      ref={(el) => {
+                        const stream = viewerStreamsRef.current.get(u.id);
+                        if (el && stream && el.srcObject !== stream) {
+                          try { el.srcObject = stream; } catch {}
+                        }
+                      }}
+                    />
+                    <div style={{ position: 'absolute', left: 8, bottom: 8, right: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>{u.avatar || '🖥️'}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+                          <span style={{ fontSize: 12, fontWeight: 800 }}>{u.name}</span>
+                          <span style={{ fontSize: 10, opacity: 0.9 }}>Screen Share</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          title="Maximize"
+                          onClick={(e) => { e.stopPropagation(); setFullScreenSharerId(u.id); removeMinimizedSharer(u.id); }}
+                          style={{ border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 6, height: 22, padding: '0 6px', cursor: 'pointer' }}
+                        >⤢</button>
+                        <button
+                          title="Close"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            try { socket?.emit('screenshare-unsubscribe', { sharerId: u.id }); } catch {}
+                            const pc = viewerPeerConnsRef.current.get(u.id);
+                            if (pc) { try { pc.close(); } catch {} }
+                            viewerPeerConnsRef.current.delete(u.id);
+                            removeScreenTile(u.id);
+                            try { socket?.emit('viewer-stopped-watching', { sharerId: u.id }); } catch {}
+                            removeMinimizedSharer(u.id);
+                          }}
+                          style={{ border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 6, height: 22, padding: '0 6px', cursor: 'pointer' }}
+                        >×</button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 24 }}>{u.avatar || '👤'}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
+                      <span style={{ fontSize: 11, opacity: 0.9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isSelected ? 'Screen Share' : 'Nearby'}</span>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
@@ -765,9 +832,10 @@ function App() {
       )}
 
       {/* Screen tiles (viewer side) */}
-      {user && !fullScreenSharerId && Object.keys(screenTiles).length > 0 && (
+      {/* Legacy floating tiles still supported for non-minimized sharers */}
+      {user && !fullScreenSharerId && Object.entries(screenTiles).some(([sid]) => !minimizedSharerIds.includes(sid)) && (
         <>
-          {Object.entries(screenTiles).map(([sharerId, layout]) => (
+          {Object.entries(screenTiles).filter(([sid]) => !minimizedSharerIds.includes(sid)).map(([sharerId, layout]) => (
             <div
               key={sharerId}
               style={{
@@ -792,7 +860,7 @@ function App() {
             >
               <div
                 style={{
-                  height: 32,
+                  height: 42,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -822,7 +890,7 @@ function App() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     title="Maximize"
-                    onClick={() => setFullScreenSharerId(sharerId)}
+                    onClick={() => { setFullScreenSharerId(sharerId); setMinimizedSharerIds([]); }}
                     style={{ border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', borderRadius: 6, height: 24, padding: '0 8px', cursor: 'pointer' }}
                   >⤢</button>
                   <button
@@ -835,6 +903,7 @@ function App() {
                       viewerPeerConnsRef.current.delete(sharerId);
                       removeScreenTile(sharerId);
                       try { socket?.emit('viewer-stopped-watching', { sharerId }); } catch {}
+                      removeMinimizedSharer(sharerId);
                     }}
                     style={{ border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', borderRadius: 6, height: 24, padding: '0 8px', cursor: 'pointer' }}
                   >×</button>
@@ -998,7 +1067,7 @@ function App() {
               onClick={() => {
                 const sid = fullScreenSharerId;
                 setFullScreenSharerId(null);
-                if (sid) dockScreenTileToTop(sid);
+                if (sid) { dockScreenTileToAnchor(sid); addMinimizedSharer(sid); }
               }}
               title="Minimize"
             >⤡</button>
