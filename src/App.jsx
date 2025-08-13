@@ -30,6 +30,7 @@ function App() {
   const [lkRoom, setLkRoom] = useState(null);
   const [isSharingScreen, setIsSharingScreen] = useState(false);
   const [nearbyPeerSocketId, setNearbyPeerSocketId] = useState(null);
+  const [selectedNearbyUserId, setSelectedNearbyUserId] = useState(null);
   const PROXIMITY_RADIUS = 3; // tiles
   const remoteScreensRef = useRef(null);
   const removeScreenTileByParticipantSid = (participantSid) => {
@@ -52,24 +53,32 @@ function App() {
     } catch {}
   }
 
-  // Compute nearest peer within radius in same room
-  const nearestPeer = useMemo(() => {
-    if (!user) return null;
+  // Nearby users within radius (sorted by distance) and nearest peer
+  const { nearbyUsers, nearestPeer } = useMemo(() => {
+    if (!user) return { nearbyUsers: [], nearestPeer: null };
     const sameRoom = users.filter(u => u.room === user.room);
     let minD = Infinity;
     let nearest = null;
+    const within = [];
     for (const u of sameRoom) {
       const dx = (u.position?.x || 0) - (user.position?.x || 0);
       const dy = (u.position?.y || 0) - (user.position?.y || 0);
       const d = Math.hypot(dx, dy);
-      if (d < minD) {
-        minD = d;
-        nearest = u;
-      }
+      if (d <= PROXIMITY_RADIUS) within.push({ ...u, _distance: d });
+      if (d < minD) { minD = d; nearest = u; }
     }
-    if (minD <= PROXIMITY_RADIUS) return nearest;
-    return null;
+    within.sort((a, b) => a._distance - b._distance);
+    return {
+      nearbyUsers: within,
+      nearestPeer: minD <= PROXIMITY_RADIUS ? nearest : null,
+    };
   }, [users, user]);
+
+  // Target peer (selected if still nearby, else nearest)
+  const targetPeerSocketId = useMemo(() => {
+    if (!selectedNearbyUserId) return nearestPeer?.id || null;
+    return nearbyUsers.some(u => u.id === selectedNearbyUserId) ? selectedNearbyUserId : (nearestPeer?.id || null);
+  }, [selectedNearbyUserId, nearbyUsers, nearestPeer]);
 
   useEffect(() => {
     setNearbyPeerSocketId(nearestPeer?.id || null);
@@ -84,11 +93,11 @@ function App() {
   // Auto-join LiveKit when in proximity so peers can see each other's screen share without manual action
   useEffect(() => {
     if (!user) return;
-    if (!nearbyPeerSocketId) return;
+    if (!targetPeerSocketId) return;
     (async () => {
       try { await ensureLiveKitJoined(); } catch {}
     })();
-  }, [user?.room, nearbyPeerSocketId]);
+  }, [user?.room, targetPeerSocketId]);
 
   async function getLiveKitToken(roomName) {
     const token = localStorage.getItem('token');
@@ -103,8 +112,8 @@ function App() {
   }
 
   async function ensureLiveKitJoined() {
-    if (!user || !nearbyPeerSocketId) return null;
-    const pairRoom = `${user.room}__pair__${[socket.id, nearbyPeerSocketId].sort().join('__')}`;
+    if (!user || !targetPeerSocketId) return null;
+    const pairRoom = `${user.room}__pair__${[socket.id, targetPeerSocketId].sort().join('__')}`;
     if (lkRoom && lkRoom.name === pairRoom) return lkRoom;
     try {
       if (lkRoom) {
@@ -202,7 +211,7 @@ function App() {
   }
 
   async function toggleScreenShare() {
-    if (!nearbyPeerSocketId) return;
+    if (!targetPeerSocketId) return;
     const room = await ensureLiveKitJoined();
     if (!room) return;
 
@@ -516,6 +525,65 @@ function App() {
         isConnected={isConnected}
       />
 
+      {/* Nearby users top bar (Gather-like) */}
+      {user && nearbyUsers.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            gap: 10,
+            padding: 8,
+            borderRadius: 12,
+            background: 'rgba(17,17,17,0.6)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 12500,
+            boxShadow: '0 10px 28px rgba(0,0,0,0.35)'
+          }}
+        >
+          {nearbyUsers.map((u) => {
+            const isSelected = targetPeerSocketId === u.id;
+            return (
+              <button
+                key={u.id}
+                onClick={() => setSelectedNearbyUserId(prev => (prev === u.id ? null : u.id))}
+                title={u.name}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: 68,
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  border: isSelected ? '2px solid #64FFDA' : '1px solid rgba(255,255,255,0.18)',
+                  background: isSelected ? 'rgba(100,255,218,0.12)' : 'rgba(255,255,255,0.06)',
+                  color: '#fff',
+                  cursor: 'pointer'
+                }}
+              >
+                <span style={{ fontSize: 18 }}>{u.avatar || '👤'}</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    marginTop: 4,
+                    maxWidth: 100,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontWeight: 600
+                  }}
+                >
+                  {u.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {user && isChatOpen && (
         <ChatPanel 
           messages={dmMessages[dmPeerId] || []}
@@ -540,17 +608,17 @@ function App() {
           <button
             aria-label="Toggle screen share"
             onClick={toggleScreenShare}
-            disabled={!nearbyPeerSocketId}
+            disabled={!targetPeerSocketId}
             style={{
               padding: '10px 14px',
               borderRadius: 10,
               border: 'none',
-              background: nearbyPeerSocketId ? '#64FFDA' : '#3a3a3a',
+              background: targetPeerSocketId ? '#64FFDA' : '#3a3a3a',
               color: '#111',
-              cursor: nearbyPeerSocketId ? 'pointer' : 'not-allowed',
+              cursor: targetPeerSocketId ? 'pointer' : 'not-allowed',
               boxShadow: '0 10px 28px rgba(100,255,218,0.25)'
             }}
-            title={nearbyPeerSocketId ? 'Start/Stop screen share with nearby user' : 'Move closer to a user to enable screen share'}
+            title={targetPeerSocketId ? 'Start/Stop screen share with nearby user' : 'Move closer to a user to enable screen share'}
           >{isSharingScreen ? 'Stop Share' : 'Share Screen'}</button>
         </div>
       )}
