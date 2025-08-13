@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTiles = 3 }) => {
+const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTiles = 3, isSharingActive = false }) => {
   const characterRef = useRef(null);
 
   useEffect(() => {
@@ -85,11 +85,15 @@ const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTile
           position: 'relative',
           backgroundColor: getAvatarColor(user.avatar),
           border: isCurrentUser ? '3px solid #64FFDA' : '2px solid #ffffff',
+          boxShadow: isSharingActive ? '0 0 0 2px rgba(239,68,68,0.9), 0 0 18px rgba(239,68,68,0.7)' : undefined
         }}
         title={user.name}
       >
         {user.avatar}
         <div className="character-name">{user.name}</div>
+        {isSharingActive && (
+          <div style={{ position: 'absolute', top: -8, right: -8, width: 14, height: 14, background: '#EF4444', borderRadius: '50%', border: '2px solid #111' }} />
+        )}
       </div>
     </div>
   );

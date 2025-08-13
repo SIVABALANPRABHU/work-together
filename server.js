@@ -279,6 +279,8 @@ app.post('/api/livekit/token', async (req, res) => {
 
 // Store connected users
 const connectedUsers = new Map();
+// Track active screen sharers by socket id -> { room, startedAt }
+const activeScreenSharers = new Map();
 
 // Require auth via JWT in socket handshake
 io.use((socket, next) => {
@@ -324,6 +326,12 @@ io.on('connection', (socket) => {
     // Send current users in the room to the new user
     const roomUsers = Array.from(connectedUsers.values()).filter(user => user.room === userData.room);
     socket.emit('room-users', roomUsers);
+
+    // Also send which users are currently sharing screens in this room
+    const roomSharers = Array.from(activeScreenSharers.entries())
+      .filter(([sid, info]) => info.room === userData.room)
+      .map(([sid]) => sid);
+    socket.emit('screenshare-active', { sharerIds: roomSharers });
   });
 
   // Handle user movement
@@ -351,6 +359,17 @@ io.on('connection', (socket) => {
         // Send current users in the new room to the switching user
         const roomUsers = Array.from(connectedUsers.values()).filter(u => u.room === data.room && u.id !== socket.id);
         socket.emit('room-users', roomUsers);
+
+        // If this user is currently sharing, update their room and notify both rooms
+        if (activeScreenSharers.has(socket.id)) {
+          // Notify old room that sharing stopped there
+          if (oldRoom) {
+            io.to(oldRoom).emit('screenshare-stopped', { sharerId: socket.id });
+          }
+          // Update their sharing room and notify new room that sharing is active
+          activeScreenSharers.set(socket.id, { room: data.room, startedAt: Date.now() });
+          io.to(data.room).emit('screenshare-started', { sharerId: socket.id, name: user.name, avatar: user.avatar });
+        }
       } else {
         // Broadcast movement to current room
         io.to(data.room).emit('user-moved', {
@@ -431,12 +450,71 @@ io.on('connection', (socket) => {
     io.to(senderSocketIds).emit('new-direct-message', message);
   });
 
+  // --- Screen share signaling (WebRTC over Socket.IO) ---
+  socket.on('start-screenshare', () => {
+    const user = connectedUsers.get(socket.id);
+    if (!user) return;
+    activeScreenSharers.set(socket.id, { room: user.room, startedAt: Date.now() });
+    io.to(user.room).emit('screenshare-started', { sharerId: socket.id, name: user.name, avatar: user.avatar });
+  });
+
+  socket.on('stop-screenshare', () => {
+    const info = activeScreenSharers.get(socket.id);
+    if (!info) return;
+    activeScreenSharers.delete(socket.id);
+    io.to(info.room).emit('screenshare-stopped', { sharerId: socket.id });
+  });
+
+  // Viewer requests to subscribe to sharer's stream
+  socket.on('screenshare-subscribe', ({ sharerId }) => {
+    if (!sharerId) return;
+    const sharer = connectedUsers.get(sharerId);
+    const viewer = connectedUsers.get(socket.id);
+    if (!sharer || !viewer) return;
+    // Only relay if in same office room and within proximity radius
+    if (sharer.room !== viewer.room) return;
+    const dx = (sharer.position?.x || 0) - (viewer.position?.x || 0);
+    const dy = (sharer.position?.y || 0) - (viewer.position?.y || 0);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const RADIUS = 3;
+    if (distance > RADIUS) return;
+    io.to(sharerId).emit('screenshare-subscribe', { from: socket.id });
+  });
+
+  // Viewer unsubscribes (moved away)
+  socket.on('screenshare-unsubscribe', ({ sharerId }) => {
+    if (!sharerId) return;
+    io.to(sharerId).emit('screenshare-unsubscribe', { from: socket.id });
+  });
+
+  // Generic WebRTC signaling relay
+  socket.on('webrtc-offer', ({ to, sdp }) => {
+    if (!to || !sdp) return;
+    io.to(to).emit('webrtc-offer', { from: socket.id, sdp });
+  });
+
+  socket.on('webrtc-answer', ({ to, sdp }) => {
+    if (!to || !sdp) return;
+    io.to(to).emit('webrtc-answer', { from: socket.id, sdp });
+  });
+
+  socket.on('webrtc-ice-candidate', ({ to, candidate }) => {
+    if (!to || !candidate) return;
+    io.to(to).emit('webrtc-ice-candidate', { from: socket.id, candidate });
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     const user = connectedUsers.get(socket.id);
     if (user) {
       io.to(user.room).emit('user-left', socket.id);
       connectedUsers.delete(socket.id);
+    }
+    // If they were sharing, notify viewers
+    if (activeScreenSharers.has(socket.id)) {
+      const info = activeScreenSharers.get(socket.id);
+      activeScreenSharers.delete(socket.id);
+      io.to(info.room).emit('screenshare-stopped', { sharerId: socket.id });
     }
     console.log('User disconnected:', socket.id);
   });
