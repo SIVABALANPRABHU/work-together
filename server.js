@@ -6,6 +6,13 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
+// LiveKit server SDK for issuing access tokens
+let LivekitServerSdk;
+try {
+  LivekitServerSdk = require('livekit-server-sdk');
+} catch (e) {
+  LivekitServerSdk = null;
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -63,6 +70,9 @@ function findUserById(userId) {
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const LIVEKIT_URL = process.env.LIVEKIT_URL || 'wss://work-together-o49u1784.livekit.cloud';
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'APIxTWPihBfvJKk';
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'Hdt3gZLafkkuJBlKbaLdPEd3neeRqDmHlH2j9HzNHWEB';
 
 function signToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
@@ -188,6 +198,83 @@ app.get('/api/chat/dm/:peerUserId', (req, res) => {
   const list = Array.isArray(map[key]) ? map[key] : [];
   const start = Math.max(0, list.length - limit);
   return res.json({ messages: list.slice(start) });
+});
+
+// --- LiveKit token endpoint ---
+// Issues a token for a given LiveKit room. If the room name encodes a proximity pair,
+// we validate that the requester is one of the pair and that both are nearby in the office.
+app.post('/api/livekit/token', async (req, res) => {
+  if (!LivekitServerSdk) {
+    return res.status(500).json({ error: 'LiveKit server SDK not installed' });
+  }
+  const payload = verifyAuthHeader(req);
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { room, identity, name } = req.body || {};
+  if (!room) return res.status(400).json({ error: 'room is required' });
+
+  // Optional proximity validation for pair rooms
+  // Expected format: `${officeRoom}__pair__${socketIdA}__${socketIdB}`
+  try {
+    const parts = String(room).split('__pair__');
+    if (parts.length === 2) {
+      const officeRoom = parts[0];
+      const [sidA, sidB] = parts[1].split('__');
+      if (!sidA || !sidB) {
+        return res.status(400).json({ error: 'invalid pair room format' });
+      }
+
+      // Find requester socket(s)
+      const requesterSocketIds = Array.from(connectedUsers.entries())
+        .filter(([sid, u]) => u.userId === payload.userId)
+        .map(([sid]) => sid);
+
+      if (!requesterSocketIds.includes(sidA) && !requesterSocketIds.includes(sidB)) {
+        return res.status(403).json({ error: 'requester not a member of pair' });
+      }
+
+      const a = connectedUsers.get(sidA);
+      const b = connectedUsers.get(sidB);
+      if (!a || !b) return res.status(404).json({ error: 'pair participant not online' });
+      if (a.room !== officeRoom || b.room !== officeRoom) {
+        return res.status(403).json({ error: 'participants not in same office room' });
+      }
+      // Euclidean distance in grid tiles
+      const dx = (a.position?.x || 0) - (b.position?.x || 0);
+      const dy = (a.position?.y || 0) - (b.position?.y || 0);
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const RADIUS = 3; // tiles
+      if (distance > RADIUS) {
+        return res.status(403).json({ error: 'participants not within proximity radius' });
+      }
+    }
+  } catch (err) {
+    return res.status(400).json({ error: 'invalid room name' });
+  }
+
+  try {
+    if (!LivekitServerSdk.AccessToken) {
+      console.error('LiveKit SDK missing AccessToken export');
+      return res.status(500).json({ error: 'livekit_sdk_incomplete' });
+    }
+    const at = new LivekitServerSdk.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+      identity: identity || String(payload.userId),
+      name: name || payload.name || 'User',
+    });
+    // Add grant using plain object to support all SDK versions
+    at.addGrant({
+      roomJoin: true,
+      room,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+    const token = await at.toJwt();
+    return res.json({ token, url: LIVEKIT_URL });
+  } catch (e) {
+    console.error('Failed to issue LiveKit token:', e?.message || e);
+    return res.status(500).json({ error: 'failed_to_issue_token', detail: String(e?.message || e) });
+  }
 });
 
 // Store connected users

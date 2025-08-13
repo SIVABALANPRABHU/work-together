@@ -13,7 +13,6 @@ const OfficeGrid = ({ currentRoom, children }) => {
   const gridRef = useRef(null);
 
   const handleWheel = (e) => {
-    e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newZoom = Math.max(0.5, Math.min(3, zoom * delta));
     

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-const Character = ({ user, onMove, isCurrentUser }) => {
+const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTiles = 3 }) => {
   const characterRef = useRef(null);
 
   useEffect(() => {
@@ -59,21 +59,38 @@ const Character = ({ user, onMove, isCurrentUser }) => {
   };
 
   return (
-    <div
-      ref={characterRef}
-      className="character"
-      style={{
-        position: 'absolute',
-        left: `${user.position.x * 3.33}%`,
-        top: `${user.position.y * 4}%`,
-        backgroundColor: getAvatarColor(user.avatar),
-        border: isCurrentUser ? '3px solid #64FFDA' : '2px solid #ffffff',
-        zIndex: 1000
-      }}
-      title={user.name}
-    >
-      {user.avatar}
-      <div className="character-name">{user.name}</div>
+    <div style={{ position: 'absolute', left: `${user.position.x * 3.33}%`, top: `${user.position.y * 4}%`, zIndex: 1000 }}>
+      {showRadius && (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            left: '-50%',
+            top: '-50%',
+            width: `${radiusTiles * 2 * 3.33}%`,
+            height: `${radiusTiles * 2 * 4}%`,
+            borderRadius: '50%',
+            border: '2px dashed rgba(100,255,218,0.5)',
+            background: 'radial-gradient(circle, rgba(100,255,218,0.08) 0%, rgba(100,255,218,0.02) 60%, rgba(0,0,0,0) 70%)',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+
+      <div
+        ref={characterRef}
+        className="character"
+        style={{
+          position: 'relative',
+          backgroundColor: getAvatarColor(user.avatar),
+          border: isCurrentUser ? '3px solid #64FFDA' : '2px solid #ffffff',
+        }}
+        title={user.name}
+      >
+        {user.avatar}
+        <div className="character-name">{user.name}</div>
+      </div>
     </div>
   );
 };

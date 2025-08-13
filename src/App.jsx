@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Room } from 'livekit-client';
 import { io } from 'socket.io-client';
 import Auth from './components/Auth';
 import OfficeGrid from './components/OfficeGrid';
@@ -24,6 +25,202 @@ function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+
+  // LiveKit local state
+  const [lkRoom, setLkRoom] = useState(null);
+  const [isSharingScreen, setIsSharingScreen] = useState(false);
+  const [nearbyPeerSocketId, setNearbyPeerSocketId] = useState(null);
+  const PROXIMITY_RADIUS = 3; // tiles
+  const remoteScreensRef = useRef(null);
+  const removeScreenTileByParticipantSid = (participantSid) => {
+    try {
+      const container = remoteScreensRef.current;
+      if (!container) return;
+      const node = container.querySelector(`.screen-tile[data-participant-sid="${participantSid}"]`);
+      if (node) container.removeChild(node);
+    } catch {}
+  };
+
+  function clearRemoteScreens() {
+    try {
+      const container = remoteScreensRef.current;
+      if (!container) return;
+      // Detach any attached elements by removing them
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+    } catch {}
+  }
+
+  // Compute nearest peer within radius in same room
+  const nearestPeer = useMemo(() => {
+    if (!user) return null;
+    const sameRoom = users.filter(u => u.room === user.room);
+    let minD = Infinity;
+    let nearest = null;
+    for (const u of sameRoom) {
+      const dx = (u.position?.x || 0) - (user.position?.x || 0);
+      const dy = (u.position?.y || 0) - (user.position?.y || 0);
+      const d = Math.hypot(dx, dy);
+      if (d < minD) {
+        minD = d;
+        nearest = u;
+      }
+    }
+    if (minD <= PROXIMITY_RADIUS) return nearest;
+    return null;
+  }, [users, user]);
+
+  useEffect(() => {
+    setNearbyPeerSocketId(nearestPeer?.id || null);
+    if (!nearestPeer && lkRoom) {
+      // Leave LiveKit if we moved away
+      try { lkRoom.disconnect(); } catch {}
+      setLkRoom(null);
+      setIsSharingScreen(false);
+    }
+  }, [nearestPeer]);
+
+  // Auto-join LiveKit when in proximity so peers can see each other's screen share without manual action
+  useEffect(() => {
+    if (!user) return;
+    if (!nearbyPeerSocketId) return;
+    (async () => {
+      try { await ensureLiveKitJoined(); } catch {}
+    })();
+  }, [user?.room, nearbyPeerSocketId]);
+
+  async function getLiveKitToken(roomName) {
+    const token = localStorage.getItem('token');
+    const me = account;
+    const res = await fetch('/api/livekit/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ room: roomName, identity: me?.id, name: me?.name })
+    });
+    if (!res.ok) throw new Error('failed token');
+    return res.json(); // { token, url }
+  }
+
+  async function ensureLiveKitJoined() {
+    if (!user || !nearbyPeerSocketId) return null;
+    const pairRoom = `${user.room}__pair__${[socket.id, nearbyPeerSocketId].sort().join('__')}`;
+    if (lkRoom && lkRoom.name === pairRoom) return lkRoom;
+    try {
+      if (lkRoom) {
+        try { await lkRoom.disconnect(); } catch {}
+        setLkRoom(null);
+      }
+      const { token, url } = await getLiveKitToken(pairRoom);
+      const room = new Room({ adaptiveStream: true });
+      await room.connect(url, token, { autoSubscribe: true });
+      setLkRoom(room);
+      // Basic event hooks
+      room.on('disconnected', () => {
+        setLkRoom(null);
+        setIsSharingScreen(false);
+        clearRemoteScreens();
+      });
+      room.on('localTrackPublished', (publication, participant) => {
+        try {
+          if (publication?.source === 'screen_share' && publication?.track?.kind === 'video') {
+            const videoEl = document.createElement('video');
+            videoEl.autoplay = true;
+            videoEl.muted = true;
+            videoEl.playsInline = true;
+            const tile = document.createElement('div');
+            tile.className = 'screen-tile';
+            tile.dataset.participantSid = participant.sid;
+            const label = document.createElement('div');
+            label.className = 'screen-label';
+            label.textContent = 'You';
+            tile.appendChild(videoEl);
+            tile.appendChild(label);
+            publication.track.attach(videoEl);
+            remoteScreensRef.current?.appendChild(tile);
+          }
+        } catch (e) {
+          console.error('attach local screen track failed', e);
+        }
+      });
+      room.on('localTrackUnpublished', (publication, participant) => {
+        try {
+          if (publication?.source === 'screen_share') {
+            removeScreenTileByParticipantSid(participant.sid);
+          }
+        } catch {}
+      });
+      room.on('trackSubscribed', (track, publication, participant) => {
+        try {
+          if (publication?.source === 'screen_share' && track.kind === 'video') {
+            const videoEl = document.createElement('video');
+            videoEl.autoplay = true;
+            videoEl.muted = true;
+            videoEl.playsInline = true;
+            const tile = document.createElement('div');
+            tile.className = 'screen-tile';
+            tile.dataset.participantSid = participant.sid;
+            const label = document.createElement('div');
+            label.className = 'screen-label';
+            label.textContent = participant?.name || participant?.identity || 'Screen';
+            tile.appendChild(videoEl);
+            tile.appendChild(label);
+            track.attach(videoEl);
+            remoteScreensRef.current?.appendChild(tile);
+          }
+        } catch (e) {
+          console.error('attach screen track failed', e);
+        }
+      });
+      room.on('trackUnsubscribed', (track, publication, participant) => {
+        try {
+          if (publication?.source === 'screen_share' && track.kind === 'video') {
+            try {
+              const container = remoteScreensRef.current;
+              if (!container) return;
+              const tile = container.querySelector(`.screen-tile[data-participant-sid="${participant.sid}"]`);
+              if (!tile) return;
+              const videoEl = tile.querySelector('video');
+              if (videoEl) {
+                try { track.detach(videoEl); } catch {}
+              }
+              container.removeChild(tile);
+            } catch {}
+          }
+        } catch {}
+      });
+      room.on('participantDisconnected', (participant) => {
+        try {
+          removeScreenTileByParticipantSid(participant.sid);
+        } catch {}
+      });
+      return room;
+    } catch (e) {
+      console.error('LiveKit join failed', e);
+      return null;
+    }
+  }
+
+  async function toggleScreenShare() {
+    if (!nearbyPeerSocketId) return;
+    const room = await ensureLiveKitJoined();
+    if (!room) return;
+
+    const existing = room.localParticipant.getTrackPublications().find(pub => pub.source === 'screen_share');
+    if (existing && isSharingScreen) {
+      await room.localParticipant.setScreenShareEnabled(false);
+      setIsSharingScreen(false);
+      try { removeScreenTileByParticipantSid(room.localParticipant.sid); } catch {}
+      return;
+    }
+    try {
+      await room.localParticipant.setScreenShareEnabled(true);
+      setIsSharingScreen(true);
+    } catch (e) {
+      console.error('Screen share failed', e);
+      setIsSharingScreen(false);
+    }
+  }
 
   // Fetch account profile when token exists (name, avatar)
   useEffect(() => {
@@ -286,6 +483,8 @@ function App() {
             user={user}
             onMove={handleMove}
             isCurrentUser={true}
+            showRadius={true}
+            radiusTiles={PROXIMITY_RADIUS}
           />
         )}
         
@@ -333,6 +532,46 @@ function App() {
             setUnreadByUserId(prev => ({ ...prev, [peerId]: 0 }));
           }}
           onClose={() => setIsChatOpen(false)}
+        />
+      )}
+
+      {user && (
+        <div style={{ position: 'fixed', bottom: 20, left: 20, display: 'flex', gap: 8, zIndex: 11000 }}>
+          <button
+            aria-label="Toggle screen share"
+            onClick={toggleScreenShare}
+            disabled={!nearbyPeerSocketId}
+            style={{
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: 'none',
+              background: nearbyPeerSocketId ? '#64FFDA' : '#3a3a3a',
+              color: '#111',
+              cursor: nearbyPeerSocketId ? 'pointer' : 'not-allowed',
+              boxShadow: '0 10px 28px rgba(100,255,218,0.25)'
+            }}
+            title={nearbyPeerSocketId ? 'Start/Stop screen share with nearby user' : 'Move closer to a user to enable screen share'}
+          >{isSharingScreen ? 'Stop Share' : 'Share Screen'}</button>
+        </div>
+      )}
+
+      {lkRoom && (
+        <div
+          ref={remoteScreensRef}
+          style={{
+            position: 'fixed',
+            bottom: 90,
+            left: 20,
+            display: 'flex',
+            gap: 10,
+            padding: 6,
+            borderRadius: 12,
+            background: 'rgba(17,17,17,0.55)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 11000,
+            maxWidth: '80vw',
+            overflowX: 'auto'
+          }}
         />
       )}
 
