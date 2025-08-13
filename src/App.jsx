@@ -32,6 +32,12 @@ function App() {
   const viewerPeerConnsRef = useRef(new Map()); // as viewer: sharerSocketId -> RTCPeerConnection
   const [activeSharerIds, setActiveSharerIds] = useState([]); // socket ids in my room currently sharing
   const [screenTiles, setScreenTiles] = useState({}); // { [sharerId]: { left, top, width, height, visible, title, ended } }
+  const viewerStreamsRef = useRef(new Map()); // as viewer: sharerSocketId -> MediaStream
+  const [fullScreenSharerId, setFullScreenSharerId] = useState(null);
+  const [fsControlsVisible, setFsControlsVisible] = useState(true);
+  const fsHideTimerRef = useRef(null);
+  const [watchersBySharerId, setWatchersBySharerId] = useState({}); // { [sharerId]: [{id,name,avatar}] }
+  const [fsViewersExpanded, setFsViewersExpanded] = useState(false);
   const [toasts, setToasts] = useState([]);
   const addToast = (text, type = 'info', ttlMs = 2800) => {
     const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -82,7 +88,13 @@ function App() {
   function ensureScreenTile(sharerId, title) {
     setScreenTiles(prev => {
       if (prev[sharerId]) return prev;
-      return { ...prev, [sharerId]: { left: 20, top: 90, width: 360, height: 220, visible: true, title: title || 'Screen', ended: false } };
+      // Default larger dock size and positioned near top center
+      const width = 560;
+      const height = 340;
+      const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1280;
+      const left = Math.max(12, Math.round((viewportW - width) / 2));
+      const top = 96;
+      return { ...prev, [sharerId]: { left, top, width, height, visible: true, title: title || 'Screen', ended: false } };
     });
   }
 
@@ -96,6 +108,16 @@ function App() {
       delete next[sharerId];
       return next;
     });
+  }
+
+  function dockScreenTileToTop(sharerId) {
+    const width = 560;
+    const height = 340;
+    const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1280;
+    const left = Math.max(12, Math.round((viewportW - width) / 2));
+    const top = 96; // below top bars
+    ensureScreenTile(sharerId, (users.find(u => u.id === sharerId)?.name) || 'Screen');
+    updateScreenTile(sharerId, { left, top, width, height, visible: true });
   }
 
   async function toggleScreenShare() {
@@ -324,11 +346,19 @@ function App() {
       };
       pc.ontrack = (ev) => {
         const [stream] = ev.streams;
+        // store stream for full-screen reuse
+        viewerStreamsRef.current.set(from, stream);
         ensureScreenTile(from, (users.find(u => u.id === from)?.name) || 'Screen');
         const tryAttach = () => {
           const videoEl = document.getElementById(`screen-video-${from}`);
           if (videoEl && videoEl instanceof HTMLVideoElement) {
             try { videoEl.srcObject = stream; } catch {}
+            // auto-open full-screen on first frame if not already
+            if (!fullScreenSharerId) {
+              setFullScreenSharerId(from);
+            }
+            // notify server I'm watching
+            try { socket.emit('viewer-started-watching', { sharerId: from }); } catch {}
             return true;
           }
           return false;
@@ -375,7 +405,12 @@ function App() {
     socket.on('screenshare-unsubscribe', onUnsubscribe);
     socket.on('webrtc-offer', onOffer);
     socket.on('webrtc-answer', onAnswer);
+    const onWatchers = ({ sharerId, watchers }) => {
+      setWatchersBySharerId(prev => ({ ...prev, [sharerId]: Array.isArray(watchers) ? watchers : [] }));
+    };
+
     socket.on('webrtc-ice-candidate', onIce);
+    socket.on('screenshare-watchers', onWatchers);
 
     return () => {
       socket.off('screenshare-active', onActive);
@@ -386,6 +421,7 @@ function App() {
       socket.off('webrtc-offer', onOffer);
       socket.off('webrtc-answer', onAnswer);
       socket.off('webrtc-ice-candidate', onIce);
+      socket.off('screenshare-watchers', onWatchers);
     };
   }, [socket, users, isSharingScreen]);
 
@@ -409,6 +445,12 @@ function App() {
         if (pc) { try { pc.close(); } catch {} }
         viewerPeerConnsRef.current.delete(sharerId);
         removeScreenTile(sharerId);
+        try { socket.emit('viewer-stopped-watching', { sharerId }); } catch {}
+        if (fullScreenSharerId === sharerId) {
+          // if current full-screen left range, switch to another eligible or exit
+          const next = eligibleSharerIds.find(id => id !== sharerId) || null;
+          setFullScreenSharerId(next || null);
+        }
       }
     }
   }, [eligibleSharerIds, socket, user, users]);
@@ -627,7 +669,7 @@ function App() {
       />
 
       {/* Nearby users top bar (Gather-like) */}
-      {user && nearbyUsers.length > 0 && (
+      {user && nearbyUsers.length > 0 && !fullScreenSharerId && (
         <div
           style={{
             position: 'fixed',
@@ -644,11 +686,12 @@ function App() {
             boxShadow: '0 10px 28px rgba(0,0,0,0.35)'
           }}
         >
-          {nearbyUsers.map((u) => {
+              {nearbyUsers.map((u) => {
             const isSelected = activeSharerIds.includes(u.id);
             return (
               <div
                 key={u.id}
+                id={`nearby-card-${u.id}`}
                 title={u.name}
                 style={{
                   display: 'flex',
@@ -702,7 +745,7 @@ function App() {
         />
       )}
 
-      {user && (
+      {user && !fullScreenSharerId && (
         <div style={{ position: 'fixed', bottom: 20, left: 20, display: 'flex', gap: 8, zIndex: 11000 }}>
           <button
             aria-label="Toggle screen share"
@@ -722,7 +765,7 @@ function App() {
       )}
 
       {/* Screen tiles (viewer side) */}
-      {user && Object.keys(screenTiles).length > 0 && (
+      {user && !fullScreenSharerId && Object.keys(screenTiles).length > 0 && (
         <>
           {Object.entries(screenTiles).map(([sharerId, layout]) => (
             <div
@@ -778,6 +821,11 @@ function App() {
                 <div style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{layout.title || 'Screen'}</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
+                    title="Maximize"
+                    onClick={() => setFullScreenSharerId(sharerId)}
+                    style={{ border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', borderRadius: 6, height: 24, padding: '0 8px', cursor: 'pointer' }}
+                  >⤢</button>
+                  <button
                     title="Close"
                     onClick={() => {
                       // As viewer: unsubscribe and close
@@ -786,6 +834,7 @@ function App() {
                       if (pc) { try { pc.close(); } catch {} }
                       viewerPeerConnsRef.current.delete(sharerId);
                       removeScreenTile(sharerId);
+                      try { socket?.emit('viewer-stopped-watching', { sharerId }); } catch {}
                     }}
                     style={{ border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', borderRadius: 6, height: 24, padding: '0 8px', cursor: 'pointer' }}
                   >×</button>
@@ -797,7 +846,19 @@ function App() {
                     Screen share has ended
                   </div>
                 ) : (
-                  <video id={`screen-video-${sharerId}`} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                  <video
+                    id={`screen-video-${sharerId}`}
+                    autoPlay
+                    muted
+                    playsInline
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+                    ref={(el) => {
+                      const stream = viewerStreamsRef.current.get(sharerId);
+                      if (el && stream && el.srcObject !== stream) {
+                        try { el.srcObject = stream; } catch {}
+                      }
+                    }}
+                  />
                 )}
                 {/* Resize handle */}
                 <div
@@ -825,7 +886,7 @@ function App() {
         </>
       )}
 
-      {user && !isChatOpen && (
+      {user && !isChatOpen && !fullScreenSharerId && (
         <button
           aria-label="Open chat"
           onClick={() => setIsChatOpen(true)}
@@ -845,6 +906,116 @@ function App() {
             boxShadow: '0 10px 28px rgba(245,158,11,0.35)'
           }}
         >💬</button>
+      )}
+
+      {/* Full-screen overlay */}
+      {user && fullScreenSharerId && (
+        <div
+          className="ss-overlay"
+          onMouseMove={() => {
+            setFsControlsVisible(true);
+            if (fsHideTimerRef.current) clearTimeout(fsHideTimerRef.current);
+            fsHideTimerRef.current = setTimeout(() => setFsControlsVisible(false), 2500);
+          }}
+        >
+          {/* Viewer list left side */}
+          <div className={`ss-viewers ${fsViewersExpanded ? 'expanded' : ''}`}>
+            {(() => {
+              // Show all nearby users as title cards on the left during full-screen
+              const list = nearbyUsers;
+              const collapsed = !fsViewersExpanded ? list.slice(0, 8) : list;
+              const hasMore = list.length > collapsed.length;
+              return (
+                <>
+                  <div className="ss-viewers-scroll">
+                    {collapsed.map(w => {
+                      const isSharer = activeSharerIds.includes(w.id);
+                      return (
+                        <div
+                          key={w.id}
+                          className="ss-avatar"
+                          title={w.name}
+                          onClick={() => {
+                            if (!isSharer) return;
+                            setFullScreenSharerId(w.id);
+                          }}
+                          style={{ cursor: isSharer ? 'pointer' : 'default', outline: w.id === fullScreenSharerId ? '2px solid #64FFDA' : undefined }}
+                        >
+                          <span className="ss-avatar-emoji">{w.avatar || '👤'}</span>
+                          {fsViewersExpanded && (<span className="ss-avatar-name">{w.name}</span>)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {hasMore && (
+                    <button className="ss-viewers-more" title="Show more viewers" onClick={() => setFsViewersExpanded(true)}>▼</button>
+                  )}
+                  {fsViewersExpanded && list.length > 8 && (
+                    <button className="ss-viewers-more" title="Collapse" onClick={() => setFsViewersExpanded(false)}>▲</button>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Video area */}
+          <div key={fullScreenSharerId} className="ss-video-wrap">
+            {(() => {
+              const stream = viewerStreamsRef.current.get(fullScreenSharerId);
+              return (
+                <video
+                  id={`screen-video-fs-${fullScreenSharerId}`}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="ss-video fade-in"
+                  ref={(el) => { if (el && stream && el.srcObject !== stream) { try { el.srcObject = stream; } catch {} } }}
+                />
+              );
+            })()}
+          </div>
+
+          {/* Bottom sharer switcher */}
+          {eligibleSharerIds.length > 1 && (
+            <div className="ss-switcher">
+              {eligibleSharerIds.map(id => {
+                const u = users.find(x => x.id === id);
+                const isActive = id === fullScreenSharerId;
+                return (
+                  <button key={id} className={`ss-switcher-item ${isActive ? 'active' : ''}`} title={u?.name || 'Screen'} onClick={() => setFullScreenSharerId(id)}>
+                    <span className="ss-switcher-emoji">{u?.avatar || '🖥️'}</span>
+                    <span className="ss-switcher-name">{u?.name || 'Screen'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Controls toolbar */}
+          <div className="ss-toolbar" style={{ display: fsControlsVisible ? 'flex' : 'none' }}>
+            <button
+              className="ss-btn"
+              onClick={() => {
+                const sid = fullScreenSharerId;
+                setFullScreenSharerId(null);
+                if (sid) dockScreenTileToTop(sid);
+              }}
+              title="Minimize"
+            >⤡</button>
+            {eligibleSharerIds.length > 1 && (
+              <button
+                className="ss-btn primary"
+                onClick={() => {
+                  const ids = eligibleSharerIds;
+                  const idx = ids.indexOf(fullScreenSharerId);
+                  const next = ids[(idx + 1) % ids.length];
+                  setFullScreenSharerId(next);
+                }}
+                title="Switch Stream"
+              >⇄</button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Toasts */}

@@ -281,6 +281,22 @@ app.post('/api/livekit/token', async (req, res) => {
 const connectedUsers = new Map();
 // Track active screen sharers by socket id -> { room, startedAt }
 const activeScreenSharers = new Map();
+// Track watchers per sharer: sharerSocketId -> Set(viewerSocketId)
+const watchersBySharer = new Map();
+
+function emitWatchers(io, sharerId) {
+  try {
+    const info = activeScreenSharers.get(sharerId);
+    if (!info) return;
+    const room = info.room;
+    const set = watchersBySharer.get(sharerId) || new Set();
+    const watchers = Array.from(set)
+      .map((vid) => connectedUsers.get(vid))
+      .filter(Boolean)
+      .map((u) => ({ id: u.id, name: u.name, avatar: u.avatar }));
+    io.to(room).emit('screenshare-watchers', { sharerId, watchers });
+  } catch {}
+}
 
 // Require auth via JWT in socket handshake
 io.use((socket, next) => {
@@ -369,6 +385,9 @@ io.on('connection', (socket) => {
           // Update their sharing room and notify new room that sharing is active
           activeScreenSharers.set(socket.id, { room: data.room, startedAt: Date.now() });
           io.to(data.room).emit('screenshare-started', { sharerId: socket.id, name: user.name, avatar: user.avatar });
+          // Reset watchers in new room
+          watchersBySharer.set(socket.id, new Set());
+          emitWatchers(io, socket.id);
         }
       } else {
         // Broadcast movement to current room
@@ -456,12 +475,15 @@ io.on('connection', (socket) => {
     if (!user) return;
     activeScreenSharers.set(socket.id, { room: user.room, startedAt: Date.now() });
     io.to(user.room).emit('screenshare-started', { sharerId: socket.id, name: user.name, avatar: user.avatar });
+    if (!watchersBySharer.has(socket.id)) watchersBySharer.set(socket.id, new Set());
+    emitWatchers(io, socket.id);
   });
 
   socket.on('stop-screenshare', () => {
     const info = activeScreenSharers.get(socket.id);
     if (!info) return;
     activeScreenSharers.delete(socket.id);
+    watchersBySharer.delete(socket.id);
     io.to(info.room).emit('screenshare-stopped', { sharerId: socket.id });
   });
 
@@ -485,6 +507,11 @@ io.on('connection', (socket) => {
   socket.on('screenshare-unsubscribe', ({ sharerId }) => {
     if (!sharerId) return;
     io.to(sharerId).emit('screenshare-unsubscribe', { from: socket.id });
+    const set = watchersBySharer.get(sharerId);
+    if (set && set.has(socket.id)) {
+      set.delete(socket.id);
+      emitWatchers(io, sharerId);
+    }
   });
 
   // Generic WebRTC signaling relay
@@ -503,6 +530,32 @@ io.on('connection', (socket) => {
     io.to(to).emit('webrtc-ice-candidate', { from: socket.id, candidate });
   });
 
+  // Viewer declares they started or stopped watching a sharer
+  socket.on('viewer-started-watching', ({ sharerId }) => {
+    if (!sharerId) return;
+    const sharer = connectedUsers.get(sharerId);
+    const viewer = connectedUsers.get(socket.id);
+    if (!sharer || !viewer) return;
+    if (!activeScreenSharers.has(sharerId)) return;
+    if (sharer.room !== viewer.room) return;
+    const dx = (sharer.position?.x || 0) - (viewer.position?.x || 0);
+    const dy = (sharer.position?.y || 0) - (viewer.position?.y || 0);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const RADIUS = 3;
+    if (distance > RADIUS) return;
+    let set = watchersBySharer.get(sharerId);
+    if (!set) { set = new Set(); watchersBySharer.set(sharerId, set); }
+    set.add(socket.id);
+    emitWatchers(io, sharerId);
+  });
+
+  socket.on('viewer-stopped-watching', ({ sharerId }) => {
+    if (!sharerId) return;
+    const set = watchersBySharer.get(sharerId);
+    if (!set) return;
+    if (set.delete(socket.id)) emitWatchers(io, sharerId);
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     const user = connectedUsers.get(socket.id);
@@ -515,7 +568,14 @@ io.on('connection', (socket) => {
       const info = activeScreenSharers.get(socket.id);
       activeScreenSharers.delete(socket.id);
       io.to(info.room).emit('screenshare-stopped', { sharerId: socket.id });
+      watchersBySharer.delete(socket.id);
     }
+    // If they were a watcher, remove from all sets
+    try {
+      for (const [sid, set] of watchersBySharer.entries()) {
+        if (set.delete(socket.id)) emitWatchers(io, sid);
+      }
+    } catch {}
     console.log('User disconnected:', socket.id);
   });
 });
