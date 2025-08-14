@@ -905,7 +905,17 @@ function App() {
           onSendMessage={handleSendMessage}
           currentUser={user}
           account={account}
-          users={directory.filter(u => u.id !== account?.id)}
+          users={(() => {
+            const others = directory.filter(u => u.id !== account?.id);
+            const lastTsById = new Map();
+            for (const u of others) {
+              const thread = dmMessages[u.id] || [];
+              const last = thread.length > 0 ? thread[thread.length - 1] : null;
+              const ts = last && last.timestamp ? Date.parse(last.timestamp) || 0 : 0;
+              lastTsById.set(u.id, ts);
+            }
+            return others.slice().sort((a, b) => (lastTsById.get(b.id) || 0) - (lastTsById.get(a.id) || 0));
+          })()}
           dmThreads={dmMessages}
           unreadByUserId={unreadByUserId}
           dmPeerId={dmPeerId}

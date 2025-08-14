@@ -186,6 +186,17 @@
       "toAvatar": "👨",
       "message": "oh",
       "timestamp": "2025-08-14T10:08:21.886Z"
+    },
+    {
+      "fromSocketId": "LAUfGbjqYXW80SJHAADl",
+      "fromUserId": "u_1754988674671_sa8m69",
+      "fromName": "guru",
+      "fromAvatar": "👧",
+      "toUserId": "u_1754985605705_fxi34f",
+      "toName": "sky",
+      "toAvatar": "👨",
+      "message": "hi",
+      "timestamp": "2025-08-14T10:11:57.310Z"
     }
   ],
   "u_1754985565053_bqwtnt__u_1754985605705_fxi34f": [
@@ -397,6 +408,17 @@
       "toAvatar": "👨",
       "message": "hi",
       "timestamp": "2025-08-14T09:59:33.994Z"
+    },
+    {
+      "fromSocketId": "OmUsdmaOMQTzXwnKAADo",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754985605705_fxi34f",
+      "toName": "sky",
+      "toAvatar": "👨",
+      "message": "hi tooo",
+      "timestamp": "2025-08-14T10:12:14.546Z"
     }
   ],
   "u_1754985565053_bqwtnt__u_1754988674671_sa8m69": [
