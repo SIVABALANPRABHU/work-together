@@ -978,12 +978,12 @@ function App() {
                     <div style={{ width: 42, height: 42, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}>{u.avatar || '👤'}</div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <div style={{ color: '#F3F4F6', fontWeight: 800, fontSize: 16 }}>{u.name}</div>
-                      <div style={{ color: '#9CA3AF', fontSize: 12 }}>{u.id}</div>
+                      <div style={{ color: '#9CA3AF', fontSize: 12 }}>Socket: {u.id}{u.userId ? ` • User: ${u.userId}` : ''}</div>
                     </div>
                   </div>
                   <button onClick={() => setProfileModalUserId(null)} title="Close" style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.06)', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer' }}>×</button>
                 </div>
-                <div style={{ padding: 14 }}>
+              <div style={{ padding: 14 }}>
                   <div style={{ color: '#E5E7EB', fontSize: 13, marginBottom: 12 }}>Say hi like in Gather!</div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button
@@ -994,7 +994,19 @@ function App() {
                       }}
                     >👋 Wave</button>
                     <button
-                      onClick={() => { setDmPeerId(u.userId || u.id); setIsChatOpen(true); setProfileModalUserId(null); }}
+                      onClick={() => {
+                        // Prefer stable account userId if present
+                        const targetUserId = u.userId || (directory.find(d => d.id === u.id)?.id);
+                        if (targetUserId) {
+                          setDmPeerId(targetUserId);
+                          loadDmHistory(targetUserId);
+                          setUnreadByUserId(prev => ({ ...prev, [targetUserId]: 0 }));
+                          setIsChatOpen(true);
+                          setProfileModalUserId(null);
+                          // expose to notification click handler as well
+                          try { window.__openDm = (uid) => { setIsChatOpen(true); setDmPeerId(uid); loadDmHistory(uid); }; } catch {}
+                        }
+                      }}
                       style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.12)', color: '#E5E7EB', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', fontWeight: 800 }}
                     >💬 Message</button>
                   </div>

@@ -333,6 +333,7 @@ io.on('connection', (socket) => {
     socket.join(userData.room);
     io.to(userData.room).emit('user-joined', {
       id: socket.id,
+      userId: socket.data.userId,
       name,
       avatar,
       position: userData.position,
@@ -367,6 +368,7 @@ io.on('connection', (socket) => {
         socket.join(data.room);
         io.to(data.room).emit('user-joined', {
           id: socket.id,
+          userId: user.userId,
           name: user.name,
           avatar: user.avatar,
           position: data.position,
