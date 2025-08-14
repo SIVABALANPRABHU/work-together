@@ -708,7 +708,37 @@ function App() {
               {account?.email && (<div className="user-menu-email">{account.email}</div>)}
             </div>
             <div className="user-menu-actions">
-              <button className="user-menu-item" onClick={() => setIsUserMenuOpen(false)}>Profile</button>
+              <div className="user-menu-item" style={{ display: 'grid', gap: 10 }}>
+                <div style={{ fontWeight: 800, color: '#F3F4F6', fontSize: 13 }}>Settings</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ color: '#E5E7EB', fontSize: 12 }}>Message notifications</div>
+                  <button
+                    onClick={() => {
+                      if (!notificationsEnabled) {
+                        const ok = ensureNotificationPermission();
+                        if (ok) {
+                          setNotificationsEnabled(true);
+                          localStorage.setItem('notify_enabled', '1');
+                          addToast('Message notifications enabled.', 'info');
+                        }
+                      } else {
+                        setNotificationsEnabled(false);
+                        localStorage.setItem('notify_enabled', '0');
+                        addToast('Notifications disabled.', 'info');
+                      }
+                    }}
+                    title={notificationsEnabled ? 'Disable message notifications' : 'Enable message notifications'}
+                    style={{
+                      background: notificationsEnabled ? 'rgba(16,185,129,0.18)' : 'rgba(17,17,17,0.6)',
+                      border: notificationsEnabled ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(255,255,255,0.12)',
+                      color: '#E5E7EB',
+                      borderRadius: 999,
+                      padding: '6px 10px',
+                      cursor: 'pointer'
+                    }}
+                  >{notificationsEnabled ? 'On' : 'Off'}</button>
+                </div>
+              </div>
               <button
                 className="user-menu-item danger"
                 onClick={() => {
@@ -1182,40 +1212,7 @@ function App() {
         </div>
       )}
 
-      {/* Message notifications opt-in (small pill) */}
-      {user && !isChatOpen && (
-        <button
-          onClick={() => {
-            if (!notificationsEnabled) {
-              const ok = ensureNotificationPermission();
-              if (ok) {
-                setNotificationsEnabled(true);
-                localStorage.setItem('notify_enabled', '1');
-              }
-            } else {
-              setNotificationsEnabled(false);
-              localStorage.setItem('notify_enabled', '0');
-              addToast('Notifications disabled.', 'info');
-            }
-          }}
-          title={notificationsEnabled ? 'Disable message notifications' : 'Enable message notifications'}
-          style={{
-            position: 'fixed',
-            bottom: 20,
-            right: 90,
-            zIndex: 12050,
-            background: notificationsEnabled ? 'rgba(16,185,129,0.18)' : 'rgba(17,17,17,0.6)',
-            border: notificationsEnabled ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(255,255,255,0.12)',
-            color: '#E5E7EB',
-            backdropFilter: 'blur(8px)',
-            borderRadius: 999,
-            padding: '8px 12px',
-            cursor: 'pointer'
-          }}
-        >
-          {notificationsEnabled ? '🔔 Notifications On' : '🔕 Notifications Off'}
-        </button>
-      )}
+      {/* Notifications bottom pill removed; moved toggle into Profile > Settings */}
 
       {/* In-app notifications bell & panel */}
       {user && (
