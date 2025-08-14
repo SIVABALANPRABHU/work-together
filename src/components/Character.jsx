@@ -58,6 +58,9 @@ const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTile
     return colors[avatar] || '#64FFDA';
   };
 
+  const presence = user.presence || 'available';
+  const presenceColor = presence === 'dnd' ? '#EF4444' : presence === 'busy' ? '#F59E0B' : '#10B981';
+
   return (
     <div style={{ position: 'absolute', left: `${user.position.x * 3.33}%`, top: `${user.position.y * 4}%`, zIndex: 1000 }}>
       {showRadius && (
@@ -91,7 +94,10 @@ const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTile
         onClick={onClick}
       >
         {user.avatar}
-        <div className="character-name">{user.name}</div>
+        <div className="character-name" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: presenceColor }} />
+          {user.name}
+        </div>
         {isSharingActive && (
           <div style={{ position: 'absolute', top: -8, right: -8, width: 14, height: 14, background: '#EF4444', borderRadius: '50%', border: '2px solid #111' }} />
         )}

@@ -172,7 +172,7 @@ function conversationKey(userIdA, userIdB) {
 
 // --- Public user directory (sanitized) ---
 app.get('/api/users', (req, res) => {
-  const users = readUsers().map(u => ({ id: u.id, name: u.name, avatar: u.avatar || '👤' }));
+  const users = readUsers().map(u => ({ id: u.id, name: u.name, avatar: u.avatar || '👤', email: u.email }));
   res.json({ users });
 });
 
@@ -326,7 +326,8 @@ io.on('connection', (socket) => {
       name,
       avatar,
       position: userData.position,
-      room: userData.room
+      room: userData.room,
+      presence: userData.presence || 'available'
     });
     
     // Broadcast to all users in the same room
@@ -337,7 +338,8 @@ io.on('connection', (socket) => {
       name,
       avatar,
       position: userData.position,
-      room: userData.room
+      room: userData.room,
+      presence: userData.presence || 'available'
     });
     
     // Send current users in the room to the new user
@@ -356,8 +358,10 @@ io.on('connection', (socket) => {
     const user = connectedUsers.get(socket.id);
     if (user) {
       const oldRoom = user.room;
+      const oldPresence = user.presence || 'available';
       user.position = data.position;
       user.room = data.room;
+      if (data.presence) user.presence = data.presence;
 
       // If room changed, move socket between rooms and notify both rooms
       if (oldRoom !== data.room) {
@@ -372,7 +376,8 @@ io.on('connection', (socket) => {
           name: user.name,
           avatar: user.avatar,
           position: data.position,
-          room: data.room
+          room: data.room,
+          presence: user.presence || 'available'
         });
         // Send current users in the new room to the switching user
         const roomUsers = Array.from(connectedUsers.values()).filter(u => u.room === data.room && u.id !== socket.id);
@@ -396,8 +401,13 @@ io.on('connection', (socket) => {
         io.to(data.room).emit('user-moved', {
           id: socket.id,
           position: data.position,
-          room: data.room
+          room: data.room,
+          presence: user.presence || 'available'
         });
+        // If presence changed, also broadcast a dedicated event
+        if ((user.presence || 'available') !== oldPresence) {
+          io.to(data.room).emit('presence-changed', { id: socket.id, presence: user.presence || 'available' });
+        }
       }
     }
   });
@@ -538,6 +548,7 @@ io.on('connection', (socket) => {
     const sender = connectedUsers.get(socket.id);
     const recipient = connectedUsers.get(to);
     if (!sender || !recipient) return;
+    if ((recipient.presence || 'available') === 'dnd') return; // do not disturb: block waves
     // same room proximity optional: uncomment to restrict
     // if (sender.room !== recipient.room) return;
     io.to(to).emit('wave-received', { from: { id: socket.id, name: sender.name, avatar: sender.avatar } });

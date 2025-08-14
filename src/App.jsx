@@ -18,6 +18,7 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [account, setAccount] = useState(null);
+  const [presence, setPresence] = useState('available'); // 'available' | 'busy' | 'dnd'
   const [directory, setDirectory] = useState([]); // all registered users
   const [dmPeerId, setDmPeerId] = useState(null);
   const [unreadByUserId, setUnreadByUserId] = useState({});
@@ -373,19 +374,22 @@ function App() {
     if (!socket) return;
     const onJoined = (newUser) => setUsers(prev => [...prev.filter(u => u.id !== newUser.id), newUser]);
     const onLeft = (userId) => setUsers(prev => prev.filter(u => u.id !== userId));
-    const onMoved = (userData) => setUsers(prev => prev.map(u => u.id === userData.id ? { ...u, position: userData.position, room: userData.room } : u));
+    const onMoved = (userData) => setUsers(prev => prev.map(u => u.id === userData.id ? { ...u, position: userData.position, room: userData.room, presence: userData.presence || u.presence } : u));
+    const onPresenceChanged = ({ id, presence }) => setUsers(prev => prev.map(u => u.id === id ? { ...u, presence: presence || 'available' } : u));
     const onRoomUsers = (roomUsers) => setUsers(roomUsers.filter(u => u.id !== socket.id));
 
     socket.on('user-joined', onJoined);
     socket.on('user-left', onLeft);
     socket.on('user-moved', onMoved);
     socket.on('room-users', onRoomUsers);
+    socket.on('presence-changed', onPresenceChanged);
 
     return () => {
       socket.off('user-joined', onJoined);
       socket.off('user-left', onLeft);
       socket.off('user-moved', onMoved);
       socket.off('room-users', onRoomUsers);
+      socket.off('presence-changed', onPresenceChanged);
     };
   }, [socket]);
 
@@ -680,7 +684,8 @@ function App() {
         avatar: chosenAvatar,
         id: socket.id,
         position: { x: 15, y: 12 }, // Adjusted for 30x25 grid
-        room: currentRoom
+        room: currentRoom,
+        presence
       };
       // persist avatar for future sessions
       localStorage.setItem('user_avatar', chosenAvatar);
@@ -695,7 +700,8 @@ function App() {
       setUser(updatedUser);
       socket.emit('user-move', {
         position: newPosition,
-        room: currentRoom
+        room: currentRoom,
+        presence
       });
     }
   };
@@ -721,7 +727,8 @@ function App() {
       setUser(updatedUser);
       socket.emit('user-move', {
         position: newPosition,
-        room: newRoom
+        room: newRoom,
+        presence
       });
     }
   };
@@ -799,6 +806,25 @@ function App() {
                       cursor: 'pointer'
                     }}
                   >{notificationsEnabled ? 'On' : 'Off'}</button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ color: '#E5E7EB', fontSize: 12 }}>Presence</div>
+                  <select
+                    value={presence}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setPresence(next);
+                      if (socket && user) {
+                        socket.emit('user-move', { position: user.position, room: user.room, presence: next });
+                        setUser({ ...user, presence: next });
+                      }
+                    }}
+                    style={{ background: 'rgba(17,17,17,0.6)', color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 8px' }}
+                  >
+                    <option value="available">Available</option>
+                    <option value="busy">Busy</option>
+                    <option value="dnd">Do Not Disturb</option>
+                  </select>
                 </div>
               </div>
               <button
@@ -951,7 +977,10 @@ function App() {
                   <>
                     <span style={{ fontSize: 24 }}>{u.avatar || '👤'}</span>
                     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 999, background: (u.presence || 'available') === 'dnd' ? '#EF4444' : (u.presence || 'available') === 'busy' ? '#F59E0B' : '#10B981' }} />
+                        {u.name}
+                      </span>
                       <span style={{ fontSize: 11, opacity: 0.9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isSelected ? 'Screen Share' : 'Nearby'}</span>
                     </div>
                   </>
@@ -978,21 +1007,40 @@ function App() {
                     <div style={{ width: 42, height: 42, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}>{u.avatar || '👤'}</div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <div style={{ color: '#F3F4F6', fontWeight: 800, fontSize: 16 }}>{u.name}</div>
-                      <div style={{ color: '#9CA3AF', fontSize: 12 }}>Socket: {u.id}{u.userId ? ` • User: ${u.userId}` : ''}</div>
+                      {(() => {
+                        const entry = directory.find(d => d.id === u.userId) || {};
+                        return (
+                          <div style={{ color: '#9CA3AF', fontSize: 12 }}>{entry.email || ''}</div>
+                        );
+                      })()}
                     </div>
                   </div>
                   <button onClick={() => setProfileModalUserId(null)} title="Close" style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.06)', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer' }}>×</button>
                 </div>
               <div style={{ padding: 14 }}>
-                  <div style={{ color: '#E5E7EB', fontSize: 13, marginBottom: 12 }}>Say hi like in Gather!</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, color: '#9CA3AF' }}>Status:</span>
+                    {(() => {
+                      const p = u.presence || 'available';
+                      const map = { available: '#10B981', busy: '#F59E0B', dnd: '#EF4444' };
+                      const label = { available: 'Available', busy: 'Busy', dnd: 'Do Not Disturb' };
+                      return (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#E5E7EB', fontSize: 12 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 999, background: map[p] || '#10B981' }} />
+                          {label[p]}
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button
-                      onClick={() => { sendWave(u.id); setProfileModalUserId(null); }}
+                      onClick={() => { if ((u.presence || 'available') !== 'dnd') { sendWave(u.id); setProfileModalUserId(null); } }}
                       style={{
-                        border: '1px solid rgba(100,255,218,0.35)', background: 'rgba(100,255,218,0.12)', color: '#E5E7EB',
+                        border: '1px solid rgba(100,255,218,0.35)', background: (u.presence || 'available') === 'dnd' ? 'rgba(255,255,255,0.06)' : 'rgba(100,255,218,0.12)', color: '#E5E7EB',
                         borderRadius: 10, padding: '10px 12px', cursor: 'pointer', fontWeight: 800
                       }}
-                    >👋 Wave</button>
+                      disabled={(u.presence || 'available') === 'dnd'}
+                    >{(u.presence || 'available') === 'dnd' ? '🚫 DND' : '👋 Wave'}</button>
                     <button
                       onClick={() => {
                         // Prefer stable account userId if present
