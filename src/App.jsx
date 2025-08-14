@@ -44,6 +44,49 @@ function App() {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifMenuRef = useRef(null);
   const notifUnread = useMemo(() => appNotifs.filter(n => !n.read).length, [appNotifs]);
+  const [profileModalUserId, setProfileModalUserId] = useState(null);
+
+  function playNotificationSound() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 880; // A5
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + 0.2);
+      // chain a second quick chirp
+      setTimeout(() => {
+        try {
+          const o2 = ctx.createOscillator();
+          const g2 = ctx.createGain();
+          o2.type = 'triangle';
+          o2.frequency.value = 660; // E5
+          g2.gain.setValueAtTime(0.0001, ctx.currentTime);
+          g2.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+          g2.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
+          o2.connect(g2); g2.connect(ctx.destination);
+          o2.start();
+          o2.stop(ctx.currentTime + 0.18);
+        } catch {}
+      }, 120);
+    } catch {}
+  }
+
+  function showBrowserNotification(title, body) {
+    try {
+      if (typeof Notification === 'undefined') return;
+      if (Notification.permission !== 'granted') return;
+      const n = new Notification(title, { body });
+      setTimeout(() => { try { n.close(); } catch {} }, 6000);
+    } catch {}
+  }
 
   const addMinimizedSharer = (id) => setMinimizedSharerIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   const removeMinimizedSharer = (id) => setMinimizedSharerIds((prev) => prev.filter(x => x !== id));
@@ -567,11 +610,25 @@ function App() {
             peerUserId: otherId
           });
         }
+        playNotificationSound();
       }
     };
     socket.on('new-direct-message', onDirect);
+    const onWave = ({ from }) => {
+      const title = `${from?.name || 'Someone'} waved at you`;
+      const text = '👋 Wave';
+      addToast(`${from?.name || 'Someone'} waved at you 👋`, 'info');
+      pushAppNotification({ fromUserId: from?.id, fromName: from?.name, fromAvatar: from?.avatar, text, timestamp: new Date().toISOString() });
+      // browser notification
+      if (notificationsEnabled) {
+        showBrowserNotification(title, text);
+      }
+      playNotificationSound();
+    };
+    socket.on('wave-received', onWave);
     return () => {
       socket.off('new-direct-message', onDirect);
+      socket.off('wave-received', onWave);
     };
   }, [socket, account?.id, dmPeerId, notificationsEnabled]);
 
@@ -649,6 +706,11 @@ function App() {
         socket.emit('send-direct-message', { toUserId: dmPeerId, message });
       }
     }
+  };
+
+  const sendWave = (toSocketId) => {
+    try { socket?.emit('wave-send', { to: toSocketId }); } catch {}
+    addToast('👋 Wave sent!', 'info');
   };
 
   const handleRoomChange = (newRoom) => {
@@ -775,6 +837,7 @@ function App() {
               onMove={() => {}}
               isCurrentUser={false}
               isSharingActive={activeSharerIds.includes(user.id)}
+              onClick={() => setProfileModalUserId(user.id)}
             />
           ))}
       </OfficeGrid>
@@ -896,6 +959,49 @@ function App() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Profile modal for wave and details */}
+      {user && profileModalUserId && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setProfileModalUserId(null); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'grid', placeItems: 'center', zIndex: 15050 }}
+        >
+          {(() => {
+            const u = users.find(x => x.id === profileModalUserId);
+            if (!u) return null;
+            return (
+              <div style={{ width: 'min(420px, 92vw)', background: 'rgba(17,17,17,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}>{u.avatar || '👤'}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ color: '#F3F4F6', fontWeight: 800, fontSize: 16 }}>{u.name}</div>
+                      <div style={{ color: '#9CA3AF', fontSize: 12 }}>{u.id}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setProfileModalUserId(null)} title="Close" style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.06)', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer' }}>×</button>
+                </div>
+                <div style={{ padding: 14 }}>
+                  <div style={{ color: '#E5E7EB', fontSize: 13, marginBottom: 12 }}>Say hi like in Gather!</div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      onClick={() => { sendWave(u.id); setProfileModalUserId(null); }}
+                      style={{
+                        border: '1px solid rgba(100,255,218,0.35)', background: 'rgba(100,255,218,0.12)', color: '#E5E7EB',
+                        borderRadius: 10, padding: '10px 12px', cursor: 'pointer', fontWeight: 800
+                      }}
+                    >👋 Wave</button>
+                    <button
+                      onClick={() => { setDmPeerId(u.userId || u.id); setIsChatOpen(true); setProfileModalUserId(null); }}
+                      style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.12)', color: '#E5E7EB', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', fontWeight: 800 }}
+                    >💬 Message</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

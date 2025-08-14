@@ -586,6 +586,17 @@
       "toAvatar": "🤖",
       "message": "sadf",
       "timestamp": "2025-08-14T10:06:06.690Z"
+    },
+    {
+      "fromSocketId": "V9fznsDaBpWIq8ddAAAs",
+      "fromUserId": "u_1754988674671_sa8m69",
+      "fromName": "guru",
+      "fromAvatar": "👧",
+      "toUserId": "u_1754985565053_bqwtnt",
+      "toName": "Student",
+      "toAvatar": "🤖",
+      "message": "hi",
+      "timestamp": "2025-08-14T10:33:24.065Z"
     }
   ],
   "u_1754985565053_bqwtnt__u_1755103682656_wec76l": [

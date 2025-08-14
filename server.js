@@ -530,6 +530,17 @@ io.on('connection', (socket) => {
     io.to(to).emit('webrtc-ice-candidate', { from: socket.id, candidate });
   });
 
+  // Wave feature: simple real-time notification
+  socket.on('wave-send', ({ to }) => {
+    if (!to) return;
+    const sender = connectedUsers.get(socket.id);
+    const recipient = connectedUsers.get(to);
+    if (!sender || !recipient) return;
+    // same room proximity optional: uncomment to restrict
+    // if (sender.room !== recipient.room) return;
+    io.to(to).emit('wave-received', { from: { id: socket.id, name: sender.name, avatar: sender.avatar } });
+  });
+
   // Viewer declares they started or stopped watching a sharer
   socket.on('viewer-started-watching', ({ sharerId }) => {
     if (!sharerId) return;
