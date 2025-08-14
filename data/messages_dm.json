@@ -245,6 +245,85 @@
       "toAvatar": "👧",
       "message": "hi",
       "timestamp": "2025-08-12T11:54:42.758Z"
+    },
+    {
+      "fromSocketId": "gNBedCPB1EsjhEfkAABe",
+      "fromUserId": "u_1754988674671_sa8m69",
+      "fromName": "guru",
+      "fromAvatar": "👧",
+      "toUserId": "u_1754985565053_bqwtnt",
+      "toName": "Student",
+      "toAvatar": "🤖",
+      "message": "hi",
+      "timestamp": "2025-08-14T09:50:05.094Z"
+    },
+    {
+      "fromSocketId": "gNBedCPB1EsjhEfkAABe",
+      "fromUserId": "u_1754988674671_sa8m69",
+      "fromName": "guru",
+      "fromAvatar": "👧",
+      "toUserId": "u_1754985565053_bqwtnt",
+      "toName": "Student",
+      "toAvatar": "🤖",
+      "message": "hii",
+      "timestamp": "2025-08-14T09:50:33.712Z"
+    },
+    {
+      "fromSocketId": "sMN8mPKqG9R_sHt6AABh",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754988674671_sa8m69",
+      "toName": "guru",
+      "toAvatar": "👧",
+      "message": "why",
+      "timestamp": "2025-08-14T09:51:32.855Z"
+    },
+    {
+      "fromSocketId": "sMN8mPKqG9R_sHt6AABh",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754988674671_sa8m69",
+      "toName": "guru",
+      "toAvatar": "👧",
+      "message": "calling me",
+      "timestamp": "2025-08-14T09:51:49.658Z"
+    },
+    {
+      "fromSocketId": "gNBedCPB1EsjhEfkAABe",
+      "fromUserId": "u_1754988674671_sa8m69",
+      "fromName": "guru",
+      "fromAvatar": "👧",
+      "toUserId": "u_1754985565053_bqwtnt",
+      "toName": "Student",
+      "toAvatar": "🤖",
+      "message": "summa",
+      "timestamp": "2025-08-14T09:52:01.001Z"
+    },
+    {
+      "fromSocketId": "sMN8mPKqG9R_sHt6AABh",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754988674671_sa8m69",
+      "toName": "guru",
+      "toAvatar": "👧",
+      "message": "hi",
+      "timestamp": "2025-08-14T09:52:20.166Z"
+    }
+  ],
+  "u_1754985565053_bqwtnt__u_1755103682656_wec76l": [
+    {
+      "fromSocketId": "sMN8mPKqG9R_sHt6AABh",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1755103682656_wec76l",
+      "toName": "thuva",
+      "toAvatar": "👧",
+      "message": "ji",
+      "timestamp": "2025-08-14T09:51:20.662Z"
     }
   ]
 }

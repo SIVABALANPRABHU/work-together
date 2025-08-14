@@ -39,9 +39,48 @@ function App() {
   const [watchersBySharerId, setWatchersBySharerId] = useState({}); // { [sharerId]: [{id,name,avatar}] }
   const [fsViewersExpanded, setFsViewersExpanded] = useState(false);
   const [minimizedSharerIds, setMinimizedSharerIds] = useState([]);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notify_enabled') === '1');
 
   const addMinimizedSharer = (id) => setMinimizedSharerIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   const removeMinimizedSharer = (id) => setMinimizedSharerIds((prev) => prev.filter(x => x !== id));
+
+  function ensureNotificationPermission() {
+    if (typeof Notification === 'undefined') {
+      addToast('Notifications are not supported in this browser.', 'error');
+      return false;
+    }
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') {
+      addToast('Notifications are blocked. Enable them in browser settings.', 'error');
+      return false;
+    }
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') {
+        setNotificationsEnabled(true);
+        localStorage.setItem('notify_enabled', '1');
+        addToast('Message notifications enabled.', 'info');
+      } else {
+        addToast('Notification permission declined.', 'error');
+      }
+    });
+    return false;
+  }
+
+  function showMessageNotification({ fromName, fromAvatar, text, peerUserId }) {
+    try {
+      if (typeof Notification === 'undefined') return;
+      if (Notification.permission !== 'granted') return;
+      const title = fromName || 'New message';
+      const body = String(text || '').slice(0, 140);
+      const n = new Notification(title, { body });
+      n.onclick = () => {
+        try { window.focus(); } catch {}
+        try { window.__openDm?.(peerUserId); } catch {}
+        try { n.close(); } catch {}
+      };
+      setTimeout(() => { try { n.close(); } catch {} }, 6000);
+    } catch {}
+  }
   const [toasts, setToasts] = useState([]);
   const addToast = (text, type = 'info', ttlMs = 2800) => {
     const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -493,13 +532,21 @@ function App() {
       const isActiveThread = otherId === dmPeerId;
       if (!isActiveThread || document.visibilityState !== 'visible') {
         setUnreadByUserId((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+        if (notificationsEnabled) {
+          showMessageNotification({
+            fromName: message.fromName,
+            fromAvatar: message.fromAvatar,
+            text: message.message,
+            peerUserId: otherId
+          });
+        }
       }
     };
     socket.on('new-direct-message', onDirect);
     return () => {
       socket.off('new-direct-message', onDirect);
     };
-  }, [socket, account?.id, dmPeerId]);
+  }, [socket, account?.id, dmPeerId, notificationsEnabled]);
 
   // Auto-select first user from directory if none selected
   useEffect(() => {
@@ -1104,6 +1151,41 @@ function App() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Message notifications opt-in (small pill) */}
+      {user && !isChatOpen && (
+        <button
+          onClick={() => {
+            if (!notificationsEnabled) {
+              const ok = ensureNotificationPermission();
+              if (ok) {
+                setNotificationsEnabled(true);
+                localStorage.setItem('notify_enabled', '1');
+              }
+            } else {
+              setNotificationsEnabled(false);
+              localStorage.setItem('notify_enabled', '0');
+              addToast('Notifications disabled.', 'info');
+            }
+          }}
+          title={notificationsEnabled ? 'Disable message notifications' : 'Enable message notifications'}
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 90,
+            zIndex: 12050,
+            background: notificationsEnabled ? 'rgba(16,185,129,0.18)' : 'rgba(17,17,17,0.6)',
+            border: notificationsEnabled ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(255,255,255,0.12)',
+            color: '#E5E7EB',
+            backdropFilter: 'blur(8px)',
+            borderRadius: 999,
+            padding: '8px 12px',
+            cursor: 'pointer'
+          }}
+        >
+          {notificationsEnabled ? '🔔 Notifications On' : '🔕 Notifications Off'}
+        </button>
       )}
     </div>
   );
