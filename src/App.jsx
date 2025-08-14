@@ -40,7 +40,7 @@ function App() {
   const [fsViewersExpanded, setFsViewersExpanded] = useState(false);
   const [minimizedSharerIds, setMinimizedSharerIds] = useState([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notify_enabled') === '1');
-  const [appNotifs, setAppNotifs] = useState([]); // [{id, fromUserId, fromName, fromAvatar, text, timestamp, read}]
+  const [appNotifs, setAppNotifs] = useState([]); // [{id, type: 'dm'|'wave', fromUserId, fromSocketId, fromName, fromAvatar, text, timestamp, read}]
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifMenuRef = useRef(null);
   const notifUnread = useMemo(() => appNotifs.filter(n => !n.read).length, [appNotifs]);
@@ -129,9 +129,9 @@ function App() {
     } catch {}
   }
 
-  function pushAppNotification({ fromUserId, fromName, fromAvatar, text, timestamp }) {
+  function pushAppNotification({ type = 'dm', fromUserId, fromSocketId, fromName, fromAvatar, text, timestamp }) {
     const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    setAppNotifs(prev => [{ id, fromUserId, fromName, fromAvatar, text, timestamp: timestamp || new Date().toISOString(), read: false }, ...prev].slice(0, 100));
+    setAppNotifs(prev => [{ id, type, fromUserId, fromSocketId, fromName, fromAvatar, text, timestamp: timestamp || new Date().toISOString(), read: false }, ...prev].slice(0, 100));
   }
 
   function dismissNotif(id) {
@@ -618,7 +618,7 @@ function App() {
       const title = `${from?.name || 'Someone'} waved at you`;
       const text = '👋 Wave';
       addToast(`${from?.name || 'Someone'} waved at you 👋`, 'info');
-      pushAppNotification({ fromUserId: from?.id, fromName: from?.name, fromAvatar: from?.avatar, text, timestamp: new Date().toISOString() });
+      pushAppNotification({ type: 'wave', fromUserId: directory.find(d => d.id === from?.id)?.id || null, fromSocketId: from?.id, fromName: from?.name, fromAvatar: from?.avatar, text, timestamp: new Date().toISOString() });
       // browser notification
       if (notificationsEnabled) {
         showBrowserNotification(title, text);
@@ -1381,10 +1381,17 @@ function App() {
                       </div>
                       <div style={{ fontSize: 12, color: '#E5E7EB', opacity: 0.95, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.text}</div>
                       <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
-                        <button
-                          onClick={() => openDmFromNotif(n)}
-                          style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
-                        >Open</button>
+                        {n.type === 'dm' ? (
+                          <button
+                            onClick={() => openDmFromNotif(n)}
+                            style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                          >Open</button>
+                        ) : (
+                          <button
+                            onClick={() => { sendWave(n.fromSocketId); dismissNotif(n.id); }}
+                            style={{ border: '1px solid rgba(100,255,218,0.35)', background: 'rgba(100,255,218,0.12)', color: '#E5E7EB', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                          >👋 Wave back</button>
+                        )}
                         <button
                           onClick={() => dismissNotif(n.id)}
                           style={{ border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.12)', color: '#fff', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
