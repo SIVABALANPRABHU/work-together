@@ -40,6 +40,10 @@ function App() {
   const [fsViewersExpanded, setFsViewersExpanded] = useState(false);
   const [minimizedSharerIds, setMinimizedSharerIds] = useState([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notify_enabled') === '1');
+  const [appNotifs, setAppNotifs] = useState([]); // [{id, fromUserId, fromName, fromAvatar, text, timestamp, read}]
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifMenuRef = useRef(null);
+  const notifUnread = useMemo(() => appNotifs.filter(n => !n.read).length, [appNotifs]);
 
   const addMinimizedSharer = (id) => setMinimizedSharerIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   const removeMinimizedSharer = (id) => setMinimizedSharerIds((prev) => prev.filter(x => x !== id));
@@ -79,6 +83,27 @@ function App() {
         try { n.close(); } catch {}
       };
       setTimeout(() => { try { n.close(); } catch {} }, 6000);
+    } catch {}
+  }
+
+  function pushAppNotification({ fromUserId, fromName, fromAvatar, text, timestamp }) {
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    setAppNotifs(prev => [{ id, fromUserId, fromName, fromAvatar, text, timestamp: timestamp || new Date().toISOString(), read: false }, ...prev].slice(0, 100));
+  }
+
+  function dismissNotif(id) {
+    setAppNotifs(prev => prev.filter(n => n.id !== id));
+  }
+
+  function openDmFromNotif(n) {
+    try {
+      setIsChatOpen(true);
+      const otherId = n.fromUserId;
+      setDmPeerId(otherId);
+      loadDmHistory(otherId);
+      setUnreadByUserId(prev => ({ ...prev, [otherId]: 0 }));
+      setAppNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
+      setIsNotifOpen(false);
     } catch {}
   }
   const [toasts, setToasts] = useState([]);
@@ -532,6 +557,8 @@ function App() {
       const isActiveThread = otherId === dmPeerId;
       if (!isActiveThread || document.visibilityState !== 'visible') {
         setUnreadByUserId((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+        // App in-app notification
+        pushAppNotification({ fromUserId: message.fromUserId, fromName: message.fromName, fromAvatar: message.fromAvatar, text: message.message, timestamp: message.timestamp });
         if (notificationsEnabled) {
           showMessageNotification({
             fromName: message.fromName,
@@ -564,14 +591,16 @@ function App() {
   // Close user menu on outside click
   useEffect(() => {
     function onDocClick(e) {
-      if (!isUserMenuOpen) return;
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+      if (isUserMenuOpen && userMenuRef.current && !userMenuRef.current.contains(e.target)) {
         setIsUserMenuOpen(false);
+      }
+      if (isNotifOpen && notifMenuRef.current && !notifMenuRef.current.contains(e.target)) {
+        setIsNotifOpen(false);
       }
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, [isUserMenuOpen]);
+  }, [isUserMenuOpen, isNotifOpen]);
 
   const loadDmHistory = (peerUserId) => {
     const token = localStorage.getItem('token');
@@ -1186,6 +1215,66 @@ function App() {
         >
           {notificationsEnabled ? '🔔 Notifications On' : '🔕 Notifications Off'}
         </button>
+      )}
+
+      {/* In-app notifications bell & panel */}
+      {user && (
+        <div ref={notifMenuRef} style={{ position: 'fixed', top: 16, right: 72, zIndex: 14000 }}>
+          <button
+            aria-label="Notifications"
+            onClick={() => setIsNotifOpen(v => !v)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: 'rgba(17,17,17,0.6)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB',
+              backdropFilter: 'blur(8px)', borderRadius: 999, padding: '8px 12px', cursor: 'pointer'
+            }}
+          >
+            <span>🔔</span>
+            {notifUnread > 0 && (
+              <span style={{ background: '#EF4444', color: '#fff', fontWeight: 800, borderRadius: 999, padding: '2px 6px', fontSize: 12 }}>{notifUnread}</span>
+            )}
+          </button>
+
+          {isNotifOpen && (
+            <div
+              style={{
+                position: 'absolute', top: 44, right: 0, width: 340, maxHeight: 420, overflowY: 'auto',
+                background: 'rgba(17,17,17,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12,
+                boxShadow: '0 18px 48px rgba(0,0,0,0.55)', padding: 8
+              }}
+            >
+              {appNotifs.length === 0 ? (
+                <div style={{ padding: 12, color: '#9CA3AF', textAlign: 'center' }}>No notifications</div>
+              ) : (
+                appNotifs.map(n => (
+                  <div key={n.id} style={{ display: 'grid', gridTemplateColumns: '36px 1fr auto', gap: 10, alignItems: 'center', padding: 8, borderRadius: 10, background: n.read ? 'transparent' : 'rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: 20, width: 36, height: 36, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8 }}>{n.fromAvatar || '👤'}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#F3F4F6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.fromName || 'User'}</span>
+                        <span style={{ fontSize: 11, color: '#9CA3AF' }}>{new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#E5E7EB', opacity: 0.95, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.text}</div>
+                      <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+                        <button
+                          onClick={() => openDmFromNotif(n)}
+                          style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                        >Open</button>
+                        <button
+                          onClick={() => dismissNotif(n.id)}
+                          style={{ border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.12)', color: '#fff', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                        >Dismiss</button>
+                      </div>
+                    </div>
+                    {!n.read && (
+                      <span title="Unread" style={{ width: 8, height: 8, borderRadius: 999, background: '#60A5FA' }} />
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
