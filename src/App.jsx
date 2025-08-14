@@ -813,21 +813,29 @@ function App() {
       )}
 
       {user && !fullScreenSharerId && (
-        <div style={{ position: 'fixed', bottom: 20, left: 20, display: 'flex', gap: 8, zIndex: 11000 }}>
+        <div className="ss-toolbar-bottom" aria-label="Screen share toolbar">
           <button
-            aria-label="Toggle screen share"
+            className={`ss-pill ${isSharingScreen ? 'active' : ''}`}
+            aria-label={isSharingScreen ? 'Stop sharing your screen' : 'Present your screen'}
+            title={isSharingScreen ? 'Stop sharing your screen' : 'Present your screen'}
             onClick={toggleScreenShare}
-            style={{
-              padding: '10px 14px',
-              borderRadius: 10,
-              border: 'none',
-              background: isSharingScreen ? '#FF6B6B' : '#64FFDA',
-              color: '#111',
-              cursor: 'pointer',
-              boxShadow: '0 10px 28px rgba(100,255,218,0.25)'
-            }}
-            title={isSharingScreen ? 'Stop sharing your screen' : 'Start screen share'}
-          >{isSharingScreen ? 'Stop Share' : 'Share Screen'}</button>
+          >
+            <span className={`ss-indicator ${isSharingScreen ? 'on' : ''}`} aria-hidden="true" />
+            <span className="ss-pill-icon" aria-hidden="true">
+              {isSharingScreen ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h13A2.5 2.5 0 0 1 21 5.5v9A2.5 2.5 0 0 1 18.5 17H5.5A2.5 2.5 0 0 1 3 14.5v-9Z"/>
+                  <rect x="7" y="7" width="10" height="7" rx="1" fill="currentColor"/>
+                  <rect x="9" y="18" width="6" height="2" rx="1" fill="currentColor"/>
+                </svg>
+              )}
+            </span>
+            <span className="ss-pill-label">{isSharingScreen ? 'Stop Sharing' : 'Present Screen'}</span>
+          </button>
         </div>
       )}
 
