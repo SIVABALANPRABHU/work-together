@@ -40,6 +40,7 @@ function App() {
   const fsHideTimerRef = useRef(null);
   const [watchersBySharerId, setWatchersBySharerId] = useState({}); // { [sharerId]: [{id,name,avatar}] }
   const [fsViewersExpanded, setFsViewersExpanded] = useState(false);
+  const [fsMultiView, setFsMultiView] = useState(false);
   const [minimizedSharerIds, setMinimizedSharerIds] = useState([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notify_enabled') === '1');
   const [appNotifs, setAppNotifs] = useState([]); // [{id, type: 'dm'|'wave', fromUserId, fromSocketId, fromName, fromAvatar, text, timestamp, read}]
@@ -174,6 +175,7 @@ function App() {
   };
 
   const PROXIMITY_RADIUS = 3; // tiles
+  const MAX_VIDEO_SUBSCRIPTIONS = 12; // cap concurrent video PCs to keep UI stable
 
   // Nearby users within radius (sorted by distance)
   const { nearbyUsers, nearestPeer } = useMemo(() => {
@@ -211,6 +213,21 @@ function App() {
     return Array.from(set);
   }, [activeSharerIds, users, user]);
 
+  // Determine which camera broadcasters are within proximity to view
+  const eligibleVideoIds = useMemo(() => {
+    if (!user) return [];
+    const set = new Set();
+    for (const bid of activeBroadcasterIds || []) {
+      const u = users.find(x => x.id === bid && x.room === user.room);
+      if (!u) continue;
+      const dx = (u.position?.x || 0) - (user.position?.x || 0);
+      const dy = (u.position?.y || 0) - (user.position?.y || 0);
+      const d = Math.hypot(dx, dy);
+      if (d <= PROXIMITY_RADIUS) set.add(bid);
+    }
+    return Array.from(set);
+  }, [activeBroadcasterIds, users, user]);
+
   const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
   function ensureScreenTile(sharerId, title) {
@@ -236,6 +253,55 @@ function App() {
       delete next[sharerId];
       return next;
     });
+  }
+
+  // Video tiles (camera) state and helpers
+  const [videoTiles, setVideoTiles] = useState({}); // { [broadcasterId]: { left, top, width, height, visible, title, ended } }
+  const videoViewerStreamsRef = useRef(new Map()); // as viewer: broadcasterSocketId -> MediaStream
+  const [fullScreenVideoId, setFullScreenVideoId] = useState(null);
+  const [videoMinimizedIds, setVideoMinimizedIds] = useState([]);
+  const addMinimizedVideo = (id) => setVideoMinimizedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  const removeMinimizedVideo = (id) => setVideoMinimizedIds((prev) => prev.filter(x => x !== id));
+
+  function ensureVideoTile(broadcasterId, title) {
+    setVideoTiles(prev => {
+      if (prev[broadcasterId]) return prev;
+      const width = 420;
+      const height = 260;
+      const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1280;
+      const left = Math.max(12, Math.round((viewportW - width) / 2));
+      const top = 120;
+      return { ...prev, [broadcasterId]: { left, top, width, height, visible: true, title: title || 'Camera', ended: false } };
+    });
+  }
+
+  function updateVideoTile(broadcasterId, partial) {
+    setVideoTiles(prev => ({ ...prev, [broadcasterId]: { ...(prev[broadcasterId] || {}), ...partial } }));
+  }
+
+  function removeVideoTile(broadcasterId) {
+    setVideoTiles(prev => {
+      const next = { ...prev };
+      delete next[broadcasterId];
+      return next;
+    });
+  }
+
+  function dockVideoTileToAnchor(broadcasterId) {
+    try {
+      const el = document.getElementById(`nearby-card-${broadcasterId}`);
+      const width = 420;
+      const height = 260;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const left = Math.max(8, Math.round(rect.left + (rect.width / 2) - (width / 2)));
+        const top = Math.max(8, Math.round(rect.top + (rect.height / 2) - (height / 2)));
+        ensureVideoTile(broadcasterId, (users.find(u => u.id === broadcasterId)?.name) || 'Camera');
+        updateVideoTile(broadcasterId, { left, top, width, height, visible: true });
+        return;
+      }
+    } catch {}
+    ensureVideoTile(broadcasterId, (users.find(u => u.id === broadcasterId)?.name) || 'Camera');
   }
 
   function dockScreenTileToTop(sharerId) {
@@ -361,6 +427,10 @@ function App() {
         try { pc.close(); } catch {}
       }
       videoBroadcasterPCsRef.current.clear();
+      // remove self preview
+      try { videoViewerStreamsRef.current.delete(user?.id); } catch {}
+      removeVideoTile(user?.id);
+      if (fullScreenVideoId === user?.id) setFullScreenVideoId(null);
       return;
     }
     try {
@@ -368,6 +438,12 @@ function App() {
       localCamStreamRef.current = stream;
       setIsCamOn(true);
       socket?.emit('start-video');
+      // set up self preview tile
+      if (user?.id) {
+        videoViewerStreamsRef.current.set(user.id, stream);
+        ensureVideoTile(user.id, user.name || 'Camera');
+        if (!fullScreenVideoId) setFullScreenVideoId(user.id);
+      }
     } catch (e) {
       addToast('Camera permission denied or unavailable.', 'error');
       setIsCamOn(false);
@@ -689,6 +765,10 @@ function App() {
     };
 
     const onOffer = async ({ from, sdp }) => {
+      if (listenerPeerConnsRef.current.size >= 32 && !listenerPeerConnsRef.current.has(from)) {
+        // soft cap to keep UI and audio stable
+        return;
+      }
       // I am listener receiving offer from speaker
       let pc = listenerPeerConnsRef.current.get(from);
       if (pc) {
@@ -822,7 +902,10 @@ function App() {
     };
 
     const onOffer = async ({ from, sdp }) => {
-      // I am viewer
+      // I am viewer. Guard cap.
+      if (videoViewerPCsRef.current.size >= MAX_VIDEO_SUBSCRIPTIONS && !videoViewerPCsRef.current.has(from)) {
+        return;
+      }
       let pc = videoViewerPCsRef.current.get(from);
       if (pc) { try { pc.close(); } catch {} videoViewerPCsRef.current.delete(from); }
       pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -830,26 +913,18 @@ function App() {
       pc.onicecandidate = (ev) => { if (ev.candidate) socket.emit('video-ice-candidate', { to: from, candidate: ev.candidate }); };
       pc.ontrack = (ev) => {
         const [stream] = ev.streams;
-        const elId = `prox-video-${from}`;
-        let el = document.getElementById(elId);
-        if (!el) {
-          el = document.createElement('video');
-          el.id = elId;
-          el.autoplay = true;
-          el.playsInline = true;
-          el.muted = true; // avoid echo since mic is separate
-          el.style.position = 'fixed';
-          el.style.right = '12px';
-          el.style.bottom = '12px';
-          el.style.width = '180px';
-          el.style.height = '120px';
-          el.style.background = '#000';
-          el.style.border = '1px solid rgba(255,255,255,0.15)';
-          el.style.borderRadius = '10px';
-          el.style.zIndex = '12510';
-          document.body.appendChild(el);
-        }
-        try { el.srcObject = stream; el.play?.().catch(() => {}); } catch {}
+        videoViewerStreamsRef.current.set(from, stream);
+        ensureVideoTile(from, (users.find(u => u.id === from)?.name) || 'Camera');
+        const tryAttach = () => {
+          const el = document.getElementById(`video-inline-${from}`);
+          if (el && el instanceof HTMLVideoElement) {
+            try { el.srcObject = stream; el.play?.().catch(() => {}); } catch {}
+            if (!fullScreenVideoId) setFullScreenVideoId(from);
+            return true;
+          }
+          return false;
+        };
+        if (!tryAttach()) setTimeout(() => { tryAttach(); }, 50);
       };
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
@@ -902,7 +977,7 @@ function App() {
     };
   }, [socket, users, isCamOn]);
 
-  // Proximity-based auto subscribe/unsubscribe
+  // Proximity-based auto subscribe/unsubscribe for screen share (with dedupe)
   useEffect(() => {
     if (!socket || !user) return;
     const subscribedSharers = new Set(viewerPeerConnsRef.current.keys());
@@ -967,7 +1042,7 @@ function App() {
     }
   }, [socket, activeSpeakerIds, users, user]);
 
-  // Proximity-based auto subscribe/unsubscribe for camera
+  // Proximity-based auto subscribe/unsubscribe for camera (with cap)
   useEffect(() => {
     if (!socket || !user) return;
     const set = new Set(activeBroadcasterIds);
@@ -983,14 +1058,26 @@ function App() {
       if (d <= PROXIMITY_RADIUS) eligible.push(broadcasterId);
     }
 
+    // Prioritize nearest broadcasters and cap
+    const prioritized = eligible
+      .map(id => {
+        const u = users.find(x => x.id === id);
+        const dx = (u?.position?.x || 0) - (user.position?.x || 0);
+        const dy = (u?.position?.y || 0) - (user.position?.y || 0);
+        return { id, d: Math.hypot(dx, dy) };
+      })
+      .sort((a, b) => a.d - b.d)
+      .slice(0, MAX_VIDEO_SUBSCRIPTIONS)
+      .map(x => x.id);
+
     for (const broadcasterId of eligible) {
-      if (!subscribed.has(broadcasterId)) {
+      if (!subscribed.has(broadcasterId) && prioritized.includes(broadcasterId)) {
         try { socket.emit('video-subscribe', { broadcasterId }); } catch {}
       }
     }
 
     for (const broadcasterId of subscribed) {
-      if (!eligible.includes(broadcasterId)) {
+      if (!prioritized.includes(broadcasterId)) {
         try { socket.emit('video-unsubscribe', { broadcasterId }); } catch {}
         const pc = videoViewerPCsRef.current.get(broadcasterId);
         if (pc) { try { pc.close(); } catch {} }
@@ -1302,110 +1389,57 @@ function App() {
         isConnected={isConnected}
       />
 
-      {/* Nearby users top bar (Gather-like) */}
-      {user && nearbyUsers.length > 0 && !fullScreenSharerId && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 12,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'grid',
-            gridAutoFlow: 'column',
-            gap: 14,
-            padding: 8,
-            borderRadius: 12,
-            background: 'rgba(17,17,17,0.6)',
-            backdropFilter: 'blur(6px)',
-            zIndex: 12500,
-            boxShadow: '0 10px 28px rgba(0,0,0,0.35)'
-          }}
-        >
-              {nearbyUsers.map((u) => {
-            const isSelected = activeSharerIds.includes(u.id);
-                const isMinimizedHere = isSelected && minimizedSharerIds.includes(u.id);
-            return (
-              <div
-                key={u.id}
-                id={`nearby-card-${u.id}`}
-                title={u.name}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: isMinimizedHere ? undefined : '40px 1fr',
-                  alignItems: 'center',
-                  minWidth: isMinimizedHere ? 260 : 180,
-                  minHeight: isMinimizedHere ? 160 : undefined,
-                  padding: isMinimizedHere ? 8 : '10px 12px',
-                  borderRadius: 12,
-                  border: isSelected ? '2px solid #64FFDA' : '1px solid rgba(255,255,255,0.18)',
-                  background: isSelected ? 'rgba(100,255,218,0.12)' : 'rgba(255,255,255,0.06)',
-                  color: '#fff',
-                  cursor: isSelected ? 'pointer' : 'default',
-                  overflow: 'hidden'
-                }}
-                    onClick={() => { if (isSelected && !isMinimizedHere) { setFullScreenSharerId(u.id); removeMinimizedSharer(u.id); } }}
-              >
-                {isMinimizedHere ? (
-                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                    <video
-                      id={`screen-video-inline-${u.id}`}
-                      autoPlay
-                      muted
-                      playsInline
-                      style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', borderRadius: 8 }}
-                      ref={(el) => {
-                        const stream = viewerStreamsRef.current.get(u.id);
-                        if (el && stream && el.srcObject !== stream) {
-                          try { el.srcObject = stream; } catch {}
-                        }
-                      }}
-                    />
-                    <div style={{ position: 'absolute', left: 8, bottom: 8, right: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 16 }}>{u.avatar || '🖥️'}</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-                          <span style={{ fontSize: 12, fontWeight: 800 }}>{u.name}</span>
-                          <span style={{ fontSize: 10, opacity: 0.9 }}>Screen Share</span>
+      {/* Nearby users top bar (Gather-like) with scroll */}
+      {user && (nearbyUsers.length > 0 || (isSharingScreen && minimizedSharerIds.includes(user.id)) || (isCamOn && videoMinimizedIds.includes(user.id))) && !fullScreenSharerId && !fullScreenVideoId && (
+        <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, padding: 8, borderRadius: 12, background: 'rgba(17,17,17,0.6)', backdropFilter: 'blur(6px)', zIndex: 12500, boxShadow: '0 10px 28px rgba(0,0,0,0.35)' }}>
+          <button title="Scroll left" aria-label="Scroll left" onClick={() => { try { document.getElementById('nearby-scroll')?.scrollBy({ left: -320, behavior: 'smooth' }); } catch {} }} style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 8, width: 28, height: 62, cursor: 'pointer' }}>‹</button>
+          <div id="nearby-scroll" style={{ overflowX: 'auto', overflowY: 'hidden', display: 'grid', gridAutoFlow: 'column', gap: 14, padding: '2px 4px', maxWidth: 'min(92vw, 1200px)' }}>
+            {[...(((isSharingScreen && minimizedSharerIds.includes(user.id)) || (isCamOn && videoMinimizedIds.includes(user.id))) ? [{ ...user }] : []), ...nearbyUsers].map((u) => {
+              const isScreenSelected = activeSharerIds.includes(u.id);
+              const isVideoSelected = activeBroadcasterIds.includes(u.id);
+              const isMinimizedScreenHere = isScreenSelected && minimizedSharerIds.includes(u.id);
+              const isMinimizedVideoHere = isVideoSelected && videoMinimizedIds.includes(u.id);
+              const isSelected = isScreenSelected || isVideoSelected;
+              return (
+                <div key={u.id} id={`nearby-card-${u.id}`} title={u.name} style={{ display: 'grid', gridTemplateColumns: (isMinimizedScreenHere || isMinimizedVideoHere) ? undefined : '40px 1fr', alignItems: 'center', minWidth: (isMinimizedScreenHere || isMinimizedVideoHere) ? 260 : 180, minHeight: (isMinimizedScreenHere || isMinimizedVideoHere) ? 160 : undefined, padding: (isMinimizedScreenHere || isMinimizedVideoHere) ? 8 : '10px 12px', borderRadius: 12, border: isSelected ? '2px solid #64FFDA' : '1px solid rgba(255,255,255,0.18)', background: isSelected ? 'rgba(100,255,218,0.12)' : 'rgba(255,255,255,0.06)', color: '#fff', cursor: isSelected ? 'pointer' : 'default', overflow: 'hidden' }} onClick={() => { if (!isSelected) return; if (isMinimizedVideoHere) { setFullScreenVideoId(u.id); removeMinimizedVideo(u.id); } else if (isMinimizedScreenHere) { setFullScreenSharerId(u.id); removeMinimizedSharer(u.id); } }}>
+                  {(isMinimizedScreenHere || isMinimizedVideoHere || (u.id === user?.id && ((isSharingScreen && minimizedSharerIds.includes(user.id)) || (isCamOn && videoMinimizedIds.includes(user.id))))) ? (
+                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                      {isMinimizedVideoHere || (u.id === user?.id && isCamOn && videoMinimizedIds.includes(user.id)) ? (
+                        <video id={`video-inline-card-${u.id}`} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#000', borderRadius: 8 }} ref={(el) => { const stream = videoViewerStreamsRef.current.get(u.id); const selfStream = (u.id === user?.id) ? localCamStreamRef.current : null; const target = stream || selfStream; if (el && target && el.srcObject !== target) { try { el.srcObject = target; } catch {} } }} />
+                      ) : (
+                        <video id={`screen-video-inline-${u.id}`} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', borderRadius: 8 }} ref={(el) => { const stream = viewerStreamsRef.current.get(u.id); const selfStream = (u.id === user?.id) ? localScreenStreamRef.current : null; const target = stream || selfStream; if (el && target && el.srcObject !== target) { try { el.srcObject = target; } catch {} } }} />
+                      )}
+                      <div style={{ position: 'absolute', left: 8, bottom: 8, right: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 16 }}>{u.avatar || '🖥️'}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800 }}>{u.name}</span>
+                            <span style={{ fontSize: 10, opacity: 0.9 }}>{(isMinimizedVideoHere || (u.id === user?.id && isCamOn && videoMinimizedIds.includes(user.id))) ? 'Video' : 'Screen Share'}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button title="Maximize" onClick={(e) => { e.stopPropagation(); const useVideo = isMinimizedVideoHere || (u.id === user?.id && isCamOn && videoMinimizedIds.includes(user.id)); if (useVideo) { setFullScreenVideoId(u.id); removeMinimizedVideo(u.id); } else { setFullScreenSharerId(u.id); removeMinimizedSharer(u.id); } }} style={{ border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 6, height: 22, padding: '0 6px', cursor: 'pointer' }}>⤢</button>
+                          <button title="Close" onClick={(e) => { e.stopPropagation(); const useVideo = isMinimizedVideoHere || (u.id === user?.id && isCamOn && videoMinimizedIds.includes(user.id)); if (useVideo) { try { socket?.emit('video-unsubscribe', { broadcasterId: u.id }); } catch {} const pc = videoViewerPCsRef.current.get(u.id); if (pc) { try { pc.close(); } catch {} } videoViewerPCsRef.current.delete(u.id); removeVideoTile(u.id); removeMinimizedVideo(u.id); } else { try { socket?.emit('screenshare-unsubscribe', { sharerId: u.id }); } catch {} const pc = viewerPeerConnsRef.current.get(u.id); if (pc) { try { pc.close(); } catch {} } viewerPeerConnsRef.current.delete(u.id); removeScreenTile(u.id); try { socket?.emit('viewer-stopped-watching', { sharerId: u.id }); } catch {} removeMinimizedSharer(u.id); } }} style={{ border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 6, height: 22, padding: '0 6px', cursor: 'pointer' }}>×</button>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          title="Maximize"
-                          onClick={(e) => { e.stopPropagation(); setFullScreenSharerId(u.id); removeMinimizedSharer(u.id); }}
-                          style={{ border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 6, height: 22, padding: '0 6px', cursor: 'pointer' }}
-                        >⤢</button>
-                        <button
-                          title="Close"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            try { socket?.emit('screenshare-unsubscribe', { sharerId: u.id }); } catch {}
-                            const pc = viewerPeerConnsRef.current.get(u.id);
-                            if (pc) { try { pc.close(); } catch {} }
-                            viewerPeerConnsRef.current.delete(u.id);
-                            removeScreenTile(u.id);
-                            try { socket?.emit('viewer-stopped-watching', { sharerId: u.id }); } catch {}
-                            removeMinimizedSharer(u.id);
-                          }}
-                          style={{ border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', borderRadius: 6, height: 22, padding: '0 6px', cursor: 'pointer' }}
-                        >×</button>
+                    </div>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 24 }}>{u.avatar || '👤'}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 999, background: (u.presence || 'available') === 'dnd' ? '#EF4444' : (u.presence || 'available') === 'busy' ? '#F59E0B' : '#10B981' }} />
+                          {u.name}
+                        </span>
+                        <span style={{ fontSize: 11, opacity: 0.9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isSelected ? (isVideoSelected ? 'Video' : 'Screen Share') : 'Nearby'}</span>
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <span style={{ fontSize: 24 }}>{u.avatar || '👤'}</span>
-                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 999, background: (u.presence || 'available') === 'dnd' ? '#EF4444' : (u.presence || 'available') === 'busy' ? '#F59E0B' : '#10B981' }} />
-                        {u.name}
-                      </span>
-                      <span style={{ fontSize: 11, opacity: 0.9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isSelected ? 'Screen Share' : 'Nearby'}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <button title="Scroll right" aria-label="Scroll right" onClick={() => { try { document.getElementById('nearby-scroll')?.scrollBy({ left: 320, behavior: 'smooth' }); } catch {} }} style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 8, width: 28, height: 62, cursor: 'pointer' }}>›</button>
         </div>
       )}
 
@@ -1650,7 +1684,7 @@ function App() {
                     playsInline
                     style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
                     ref={(el) => {
-                      const stream = viewerStreamsRef.current.get(sharerId);
+                      const stream = viewerStreamsRef.current.get(sharerId) || (sharerId === user?.id ? localScreenStreamRef.current : null);
                       if (el && stream && el.srcObject !== stream) {
                         try { el.srcObject = stream; } catch {}
                       }
@@ -1683,6 +1717,94 @@ function App() {
         </>
       )}
 
+      {/* Camera tiles (viewer side) */}
+      {user && !fullScreenVideoId && Object.entries(videoTiles).some(([sid]) => !videoMinimizedIds.includes(sid)) && (
+        <>
+          {Object.entries(videoTiles).filter(([sid]) => !videoMinimizedIds.includes(sid)).map(([broadcasterId, layout]) => (
+            <div
+              key={broadcasterId}
+              style={{
+                position: 'fixed', left: layout.left, top: layout.top, width: layout.width, height: layout.height,
+                zIndex: 12100, background: 'rgba(10,10,10,0.85)', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 10, overflow: 'hidden', boxShadow: '0 12px 32px rgba(0,0,0,0.45)', transition: 'opacity 220ms ease', opacity: layout.visible ? 1 : 0
+              }}
+            >
+              <div style={{ height: 42, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'rgba(255,255,255,0.06)', padding: '0 8px', cursor: 'move', userSelect: 'none' }}
+                onMouseDown={(e) => {
+                  const startX = e.clientX;
+                  const startY = e.clientY;
+                  const startLeft = layout.left;
+                  const startTop = layout.top;
+                  function onMove(ev) {
+                    updateVideoTile(broadcasterId, { left: Math.max(0, startLeft + (ev.clientX - startX)), top: Math.max(0, startTop + (ev.clientY - startY)) });
+                  }
+                  function onUp() {
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onUp);
+                  }
+                  window.addEventListener('mousemove', onMove);
+                  window.addEventListener('mouseup', onUp);
+                }}
+              >
+                <div style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{layout.title || 'Camera'}</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button title="Maximize" onClick={() => { setFullScreenVideoId(broadcasterId); setVideoMinimizedIds([]); }} style={{ border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', borderRadius: 6, height: 24, padding: '0 8px', cursor: 'pointer' }}>⤢</button>
+                  <button title="Close" onClick={() => {
+                    try { socket?.emit('video-unsubscribe', { broadcasterId }); } catch {}
+                    const pc = videoViewerPCsRef.current.get(broadcasterId);
+                    if (pc) { try { pc.close(); } catch {} }
+                    videoViewerPCsRef.current.delete(broadcasterId);
+                    removeVideoTile(broadcasterId);
+                    removeMinimizedVideo(broadcasterId);
+                  }} style={{ border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', borderRadius: 6, height: 24, padding: '0 8px', cursor: 'pointer' }}>×</button>
+                </div>
+              </div>
+              <div style={{ position: 'relative', width: '100%', height: `calc(100% - 32px)` }}>
+                {layout.ended ? (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b0b0b0', fontSize: 14 }}>Video has ended</div>
+                ) : (
+                  <>
+                    <video
+                      id={`video-inline-${broadcasterId}`}
+                      autoPlay
+                      muted
+                      playsInline
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#000' }}
+                      ref={(el) => {
+                        const stream = videoViewerStreamsRef.current.get(broadcasterId);
+                        if (el && stream && el.srcObject !== stream) {
+                          try { el.srcObject = stream; } catch {}
+                        }
+                      }}
+                    />
+                    {/* Resize handle */}
+                    <div
+                      style={{ position: 'absolute', right: 4, bottom: 4, width: 16, height: 16, cursor: 'nwse-resize', background: 'rgba(255,255,255,0.2)', borderRadius: 4 }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        const startX = e.clientX;
+                        const startY = e.clientY;
+                        const startW = layout.width;
+                        const startH = layout.height;
+                        function onMove(ev) {
+                          updateVideoTile(broadcasterId, { width: Math.max(200, startW + (ev.clientX - startX)), height: Math.max(120, startH + (ev.clientY - startY)) });
+                        }
+                        function onUp() {
+                          window.removeEventListener('mousemove', onMove);
+                          window.removeEventListener('mouseup', onUp);
+                        }
+                        window.addEventListener('mousemove', onMove);
+                        window.addEventListener('mouseup', onUp);
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
       {user && !isChatOpen && !fullScreenSharerId && (
         <button
           aria-label="Open chat"
@@ -1705,7 +1827,7 @@ function App() {
         >💬</button>
       )}
 
-      {/* Full-screen overlay */}
+      {/* Full-screen overlay: screen share */}
       {user && fullScreenSharerId && (
         <div
           className="ss-overlay"
@@ -1811,6 +1933,40 @@ function App() {
                 title="Switch Stream"
               >⇄</button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Full-screen overlay: camera video */}
+      {user && fullScreenVideoId && (
+        <div className="ss-overlay">
+          <div className="ss-video-wrap">
+            {(() => {
+              const stream = videoViewerStreamsRef.current.get(fullScreenVideoId);
+              return (
+                <video id={`video-fs-${fullScreenVideoId}`} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+                  ref={(el) => { if (el && stream && el.srcObject !== stream) { try { el.srcObject = stream; el.play?.().catch(() => {}); } catch {} } }}
+                />
+              );
+            })()}
+          </div>
+          {activeBroadcasterIds.length > 1 && (
+            <div className="ss-switcher">
+              {activeBroadcasterIds.map(id => {
+                const u = users.find(x => x.id === id);
+                const isActive = id === fullScreenVideoId;
+                return (
+                  <button key={id} className={`ss-switcher-item ${isActive ? 'active' : ''}`} title={u?.name || 'Camera'} onClick={() => setFullScreenVideoId(id)}>
+                    <span className="ss-switcher-emoji">{u?.avatar || '📷'}</span>
+                    <span className="ss-switcher-name">{u?.name || 'Camera'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="ss-topbar">
+            <div />
+            <button className="ss-btn" onClick={() => { const id = fullScreenVideoId; setFullScreenVideoId(null); if (id) { dockVideoTileToAnchor(id); addMinimizedVideo(id); } }}>Minimize</button>
           </div>
         </div>
       )}
