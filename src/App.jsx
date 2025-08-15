@@ -451,6 +451,19 @@ function App() {
     }
   }
 
+  // Quick end button: turn off mic, camera, and screen share (Meet-style hang up)
+  function endAllMedia() {
+    try {
+      if (isMicOn) toggleMic();
+    } catch {}
+    try {
+      if (isCamOn) toggleCamera();
+    } catch {}
+    try {
+      if (isSharingScreen) toggleScreenShare();
+    } catch {}
+  }
+
   // Fetch account profile when token exists (name, avatar)
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -1546,49 +1559,77 @@ function App() {
         />
       )}
 
-      {user && !fullScreenSharerId && (
-        <div className="ss-toolbar-bottom" aria-label="Screen share toolbar">
+      {user && !fullScreenSharerId && !fullScreenVideoId && (
+        <div className="meet-controls" aria-label="Call controls">
           <button
-            className={`ss-pill ${isSharingScreen ? 'active' : ''}`}
-            aria-label={isSharingScreen ? 'Stop sharing your screen' : 'Present your screen'}
-            title={isSharingScreen ? 'Stop sharing your screen' : 'Present your screen'}
-            onClick={toggleScreenShare}
-          >
-            <span className={`ss-indicator ${isSharingScreen ? 'on' : ''}`} aria-hidden="true" />
-            <span className="ss-pill-icon" aria-hidden="true">
-              {isSharingScreen ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
-              ) : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h13A2.5 2.5 0 0 1 21 5.5v9A2.5 2.5 0 0 1 18.5 17H5.5A2.5 2.5 0 0 1 3 14.5v-9Z"/>
-                  <rect x="7" y="7" width="10" height="7" rx="1" fill="currentColor"/>
-                  <rect x="9" y="18" width="6" height="2" rx="1" fill="currentColor"/>
-                </svg>
-              )}
-            </span>
-            <span className="ss-pill-label">{isSharingScreen ? 'Stop Sharing' : 'Present Screen'}</span>
-          </button>
-          <button
-            className={`ss-pill ${isMicOn ? 'active' : ''}`}
-            aria-label={isMicOn ? 'Mic off' : 'Mic on'}
-            title={isMicOn ? 'Turn off mic' : 'Turn on mic'}
+            className={`meet-btn ${isMicOn ? 'active' : ''}`}
+            aria-label={isMicOn ? 'Turn off microphone' : 'Turn on microphone'}
+            title={isMicOn ? 'Turn off microphone' : 'Turn on microphone'}
             onClick={toggleMic}
           >
-            <span className={`ss-indicator ${isMicOn ? 'on' : ''}`} aria-hidden="true" />
-            <span className="ss-pill-icon" aria-hidden="true">🎙️</span>
-            <span className="ss-pill-label">{isMicOn ? 'Mic On' : 'Mic Off'}</span>
+            {isMicOn ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 14a4 4 0 0 0 4-4V7a4 4 0 1 0-8 0v3a4 4 0 0 0 4 4Z" stroke="currentColor" strokeWidth="2"/>
+                <path d="M19 11a7 7 0 0 1-14 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M12 18v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 10V7a3 3 0 1 1 6 0v3a3 3 0 0 1-3 3" stroke="currentColor" strokeWidth="2"/>
+                <path d="M19 11a7 7 0 0 1-3.1 5.78M8.1 16.78A7 7 0 0 1 5 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M12 18v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="m4 4 16 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            )}
           </button>
           <button
-            className={`ss-pill ${isCamOn ? 'active' : ''}`}
-            aria-label={isCamOn ? 'Camera off' : 'Camera on'}
+            className={`meet-btn ${isCamOn ? 'active' : ''}`}
+            aria-label={isCamOn ? 'Turn off camera' : 'Turn on camera'}
             title={isCamOn ? 'Turn off camera' : 'Turn on camera'}
             onClick={toggleCamera}
           >
-            <span className={`ss-indicator ${isCamOn ? 'on' : ''}`} aria-hidden="true" />
-            <span className="ss-pill-icon" aria-hidden="true">📷</span>
-            <span className="ss-pill-label">{isCamOn ? 'Camera On' : 'Camera Off'}</span>
+            {isCamOn ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+                <path d="M21 8v8l-4-3-2-1 2-1 4-3Z" fill="currentColor"/>
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+                <path d="M21 8v8l-4-3-2-1 2-1 4-3Z" fill="currentColor"/>
+                <path d="m4 4 16 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            )}
+          </button>
+          <button
+            className={`meet-btn ${isSharingScreen ? 'active' : ''}`}
+            aria-label={isSharingScreen ? 'Stop presenting' : 'Present now'}
+            title={isSharingScreen ? 'Stop presenting' : 'Present now'}
+            onClick={toggleScreenShare}
+          >
+            {isSharingScreen ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+                <path d="M12 20v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M9 10l3-3 3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+                <path d="M12 20v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M12 8l-3 3m3-3 3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          <button
+            className="meet-btn danger"
+            aria-label="Hang up"
+            title="Hang up (turn off mic, camera, and screen share)"
+            onClick={endAllMedia}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6.5 15.5c2.3-1.5 8.7-1.5 11 0 1 .6 2.5-.2 2.5-1.4v-2c0-.6-.4-1.2-1-1.4-4-1.5-10-1.5-14 0-.6.2-1 .8-1 1.4v2c0 1.2 1.5 2 2.5 1.4Z" fill="currentColor"/>
+            </svg>
           </button>
         </div>
       )}

@@ -1084,3 +1084,39 @@ body {
 
 .ss-pill-icon { display: inline-flex; align-items: center; justify-content: center; color: #F3F4F6; }
 .ss-pill-label { font-size: 13px; font-weight: 800; color: #E5E7EB; text-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+
+/* Google Meet–style control bar */
+.meet-controls {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(17,17,17,0.55);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  z-index: 15000;
+}
+
+.meet-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.9);
+  color: #111;
+  border: 1px solid rgba(255,255,255,0.35);
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, color 0.16s ease;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
+.meet-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(0,0,0,0.45); }
+.meet-btn.active { background: #1F2937; color: #E5E7EB; border-color: rgba(255,255,255,0.22); }
+.meet-btn.danger { background: #ef4444; color: #fff; border-color: rgba(239,68,68,0.6); }
+.meet-btn.danger:hover { background: #dc2626; }
