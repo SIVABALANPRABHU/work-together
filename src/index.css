@@ -309,6 +309,15 @@ body {
   pointer-events: auto;
 }
 
+.character.walking {
+  animation: bob 0.36s ease-in-out infinite alternate;
+}
+
+@keyframes bob {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-3px); }
+}
+
 .character:hover {
   transform: scale(1.15);
   box-shadow: 0 8px 25px rgba(100, 255, 218, 0.5);

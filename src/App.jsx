@@ -26,6 +26,9 @@ function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  // Movement state
+  const [autoPath, setAutoPath] = useState([]); // array of {x,y} to walk to
+  const [isWalking, setIsWalking] = useState(false);
   
   // Screen share and WebRTC state
   const [isSharingScreen, setIsSharingScreen] = useState(false);
@@ -1222,6 +1225,72 @@ function App() {
     }
   };
 
+  // Cancel auto-walk if user presses arrow keys
+  const cancelAutoWalk = () => {
+    setAutoPath([]);
+    // brief walking animation pulse for manual move
+    setIsWalking(true);
+    setTimeout(() => setIsWalking(false), 200);
+  };
+
+  // Step through auto path at a steady pace
+  useEffect(() => {
+    if (!user) return;
+    if (!autoPath || autoPath.length === 0) { setIsWalking(false); return; }
+    setIsWalking(true);
+    const next = autoPath[0];
+    // Move one tile towards next step (already discrete)
+    const timer = setTimeout(() => {
+      handleMove(next);
+      setAutoPath((prev) => prev.slice(1));
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [autoPath, user]);
+
+  // Build a simple straight/Manhattan path avoiding walls (no A*)
+  function isWalkable(x, y) {
+    try {
+      const tile = officeLayout[currentRoom]?.grid?.[y]?.[x];
+      return tile && tile !== 'W';
+    } catch {
+      return false;
+    }
+  }
+
+  function computePath(from, to) {
+    const path = [];
+    let cx = from.x;
+    let cy = from.y;
+    const guard = 1000;
+    let steps = 0;
+    const dx = Math.sign(to.x - cx);
+    const dy = Math.sign(to.y - cy);
+    // Greedy axis-first walk with wall checks
+    while ((cx !== to.x || cy !== to.y) && steps < guard) {
+      steps++;
+      let nx = cx;
+      let ny = cy;
+      const tryX = cx !== to.x ? cx + Math.sign(to.x - cx) : cx;
+      const tryY = cy !== to.y ? cy + Math.sign(to.y - cy) : cy;
+      // Prefer horizontal step, else vertical
+      if (tryX !== cx && isWalkable(tryX, cy)) {
+        nx = tryX; ny = cy;
+      } else if (tryY !== cy && isWalkable(cx, tryY)) {
+        nx = cx; ny = tryY;
+      } else if (tryX !== cx && tryY !== cy && isWalkable(tryX, tryY)) {
+        // diagonal fallback if both open (still applies as two steps visually)
+        nx = tryX; ny = tryY;
+      } else {
+        // Blocked; stop pathing
+        break;
+      }
+      cx = nx; cy = ny;
+      path.push({ x: cx, y: cy });
+      if (path.length > 800) break; // safety
+    }
+    return path;
+  }
+
   const handleSendMessage = (message) => {
     if (socket) {
       if (dmPeerId) {
@@ -1359,7 +1428,16 @@ function App() {
           </div>
         )}
       </div>
-      <OfficeGrid currentRoom={currentRoom}>
+      <OfficeGrid
+        currentRoom={currentRoom}
+        onDoubleClickTile={({ x, y }) => {
+          if (!user) return;
+          const clamped = { x: Math.max(1, Math.min(28, x)), y: Math.max(1, Math.min(23, y)) };
+          if (!isWalkable(clamped.x, clamped.y)) return;
+          const path = computePath(user.position, clamped);
+          setAutoPath(path);
+        }}
+      >
         {/* Characters are now rendered inside the zoomable OfficeGrid */}
         {user && (
           <Character 
@@ -1369,6 +1447,8 @@ function App() {
             showRadius={false}
             radiusTiles={PROXIMITY_RADIUS}
             isSharingActive={isSharingScreen}
+            onManualMove={cancelAutoWalk}
+            isWalking={isWalking}
           />
         )}
         

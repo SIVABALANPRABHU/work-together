@@ -52,7 +52,7 @@ const Controls = ({ onJoinOffice, onRoomChange, currentRoom, user, account, coll
         <div className="control-group">
           <label>Movement:</label>
           <p style={{ fontSize: '12px', color: '#b0b0b0', marginTop: '5px' }}>
-            Use WASD or Arrow Keys to move
+            Use Arrow Keys to move. Double-click anywhere to walk there.
           </p>
         </div>
 

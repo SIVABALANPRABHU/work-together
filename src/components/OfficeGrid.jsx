@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { officeLayout, officeObjects } from '../data/officeData';
 
-const OfficeGrid = ({ currentRoom, children }) => {
+const OfficeGrid = ({ currentRoom, children, onDoubleClickTile }) => {
   const currentLayout = officeLayout[currentRoom] || officeLayout['main-office'];
   const currentObjects = officeObjects[currentRoom] || officeObjects['main-office'];
   
@@ -244,6 +244,19 @@ const OfficeGrid = ({ currentRoom, children }) => {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onDoubleClick={(e) => {
+          if (!gridRef.current) return;
+          const rect = gridRef.current.getBoundingClientRect();
+          const xPx = (e.clientX - rect.left - pan.x) / zoom;
+          const yPx = (e.clientY - rect.top - pan.y) / zoom;
+          const cols = currentLayout.grid[0].length;
+          const rows = currentLayout.grid.length;
+          const tileW = rect.width / cols;
+          const tileH = rect.height / rows;
+          const tx = Math.max(0, Math.min(cols - 1, Math.floor(xPx / tileW)));
+          const ty = Math.max(0, Math.min(rows - 1, Math.floor(yPx / tileH)));
+          onDoubleClickTile?.({ x: tx, y: ty });
+        }}
       >
         {currentLayout.grid.map((row, y) =>
           row.map((tile, x) => (

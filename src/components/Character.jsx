@@ -1,34 +1,35 @@
 import React, { useEffect, useRef } from 'react';
 
-const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTiles = 3, isSharingActive = false, onClick }) => {
+const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTiles = 3, isSharingActive = false, onClick, onManualMove, isWalking = false }) => {
   const characterRef = useRef(null);
 
   useEffect(() => {
     if (!isCurrentUser) return;
 
     const handleKeyDown = (e) => {
+      // Ignore when typing in inputs/textareas/contenteditable
+      const ae = document.activeElement;
+      const isTyping = ae && (
+        ae.tagName === 'INPUT' ||
+        ae.tagName === 'TEXTAREA' ||
+        ae.getAttribute('contenteditable') === 'true'
+      );
+      if (isTyping) return;
+
       const currentPos = { ...user.position };
       let newPos = { ...currentPos };
 
       switch (e.key) {
         case 'ArrowUp':
-        case 'w':
-        case 'W':
           newPos.y = Math.max(1, currentPos.y - 1);
           break;
         case 'ArrowDown':
-        case 's':
-        case 'S':
           newPos.y = Math.min(23, currentPos.y + 1);
           break;
         case 'ArrowLeft':
-        case 'a':
-        case 'A':
           newPos.x = Math.max(1, currentPos.x - 1);
           break;
         case 'ArrowRight':
-        case 'd':
-        case 'D':
           newPos.x = Math.min(28, currentPos.x + 1);
           break;
         default:
@@ -36,6 +37,8 @@ const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTile
       }
 
       if (newPos.x !== currentPos.x || newPos.y !== currentPos.y) {
+        // notify parent that manual movement was initiated (to cancel auto-walk, etc.)
+        try { onManualMove?.(); } catch {}
         onMove(newPos);
       }
     };
@@ -83,7 +86,7 @@ const Character = ({ user, onMove, isCurrentUser, showRadius = false, radiusTile
 
       <div
         ref={characterRef}
-        className="character"
+        className={`character${isWalking ? ' walking' : ''}`}
         style={{
           position: 'relative',
           backgroundColor: getAvatarColor(user.avatar),
