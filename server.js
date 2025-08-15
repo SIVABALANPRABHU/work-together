@@ -281,6 +281,8 @@ app.post('/api/livekit/token', async (req, res) => {
 const connectedUsers = new Map();
 // Track active screen sharers by socket id -> { room, startedAt }
 const activeScreenSharers = new Map();
+// Track active audio speakers by socket id -> { room, startedAt }
+const activeAudioSpeakers = new Map();
 // Track watchers per sharer: sharerSocketId -> Set(viewerSocketId)
 const watchersBySharer = new Map();
 
@@ -351,6 +353,12 @@ io.on('connection', (socket) => {
       .filter(([sid, info]) => info.room === userData.room)
       .map(([sid]) => sid);
     socket.emit('screenshare-active', { sharerIds: roomSharers });
+
+    // Also send which users currently have mic on in this room
+    const roomSpeakers = Array.from(activeAudioSpeakers.entries())
+      .filter(([sid, info]) => info.room === userData.room)
+      .map(([sid]) => sid);
+    socket.emit('audio-active', { speakerIds: roomSpeakers });
   });
 
   // Handle user movement
@@ -395,6 +403,17 @@ io.on('connection', (socket) => {
           // Reset watchers in new room
           watchersBySharer.set(socket.id, new Set());
           emitWatchers(io, socket.id);
+        }
+
+        // If this user currently has mic on, update their room and notify both rooms
+        if (activeAudioSpeakers.has(socket.id)) {
+          // Notify old room that audio stopped there
+          if (oldRoom) {
+            io.to(oldRoom).emit('audio-stopped', { speakerId: socket.id });
+          }
+          // Update their audio room and notify new room that audio is active
+          activeAudioSpeakers.set(socket.id, { room: data.room, startedAt: Date.now() });
+          io.to(data.room).emit('audio-started', { speakerId: socket.id, name: user.name, avatar: user.avatar });
         }
       } else {
         // Broadcast movement to current room
@@ -542,6 +561,57 @@ io.on('connection', (socket) => {
     io.to(to).emit('webrtc-ice-candidate', { from: socket.id, candidate });
   });
 
+  // --- Proximity voice (mic) signaling (WebRTC over Socket.IO) ---
+  socket.on('start-audio', () => {
+    const user = connectedUsers.get(socket.id);
+    if (!user) return;
+    activeAudioSpeakers.set(socket.id, { room: user.room, startedAt: Date.now() });
+    io.to(user.room).emit('audio-started', { speakerId: socket.id, name: user.name, avatar: user.avatar });
+  });
+
+  socket.on('stop-audio', () => {
+    const info = activeAudioSpeakers.get(socket.id);
+    if (!info) return;
+    activeAudioSpeakers.delete(socket.id);
+    io.to(info.room).emit('audio-stopped', { speakerId: socket.id });
+  });
+
+  // Listener requests to subscribe to speaker's mic
+  socket.on('audio-subscribe', ({ speakerId }) => {
+    if (!speakerId) return;
+    const speaker = connectedUsers.get(speakerId);
+    const listener = connectedUsers.get(socket.id);
+    if (!speaker || !listener) return;
+    // Only relay if in same office room and within proximity radius
+    if (speaker.room !== listener.room) return;
+    const dx = (speaker.position?.x || 0) - (listener.position?.x || 0);
+    const dy = (speaker.position?.y || 0) - (listener.position?.y || 0);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const RADIUS = 3;
+    if (distance > RADIUS) return;
+    io.to(speakerId).emit('audio-subscribe', { from: socket.id });
+  });
+
+  // Listener unsubscribes (moved away)
+  socket.on('audio-unsubscribe', ({ speakerId }) => {
+    if (!speakerId) return;
+    io.to(speakerId).emit('audio-unsubscribe', { from: socket.id });
+  });
+
+  // Relay WebRTC for audio
+  socket.on('audio-webrtc-offer', ({ to, sdp }) => {
+    if (!to || !sdp) return;
+    io.to(to).emit('audio-webrtc-offer', { from: socket.id, sdp });
+  });
+  socket.on('audio-webrtc-answer', ({ to, sdp }) => {
+    if (!to || !sdp) return;
+    io.to(to).emit('audio-webrtc-answer', { from: socket.id, sdp });
+  });
+  socket.on('audio-ice-candidate', ({ to, candidate }) => {
+    if (!to || !candidate) return;
+    io.to(to).emit('audio-ice-candidate', { from: socket.id, candidate });
+  });
+
   // Wave feature: simple real-time notification
   socket.on('wave-send', ({ to }) => {
     if (!to) return;
@@ -587,12 +657,19 @@ io.on('connection', (socket) => {
       io.to(user.room).emit('user-left', socket.id);
       connectedUsers.delete(socket.id);
     }
+    // optional: emit presence offline to room
+    // if (user) io.to(user.room).emit('presence-changed', { id: socket.id, presence: 'offline' });
     // If they were sharing, notify viewers
     if (activeScreenSharers.has(socket.id)) {
       const info = activeScreenSharers.get(socket.id);
       activeScreenSharers.delete(socket.id);
       io.to(info.room).emit('screenshare-stopped', { sharerId: socket.id });
       watchersBySharer.delete(socket.id);
+    }
+    if (activeAudioSpeakers.has(socket.id)) {
+      const infoA = activeAudioSpeakers.get(socket.id);
+      activeAudioSpeakers.delete(socket.id);
+      io.to(infoA.room).emit('audio-stopped', { speakerId: socket.id });
     }
     // If they were a watcher, remove from all sets
     try {

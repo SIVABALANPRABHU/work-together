@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+// import { Room as LiveKitRoom, createLocalAudioTrack } from 'livekit-client';
 import { io } from 'socket.io-client';
 import Auth from './components/Auth';
 import OfficeGrid from './components/OfficeGrid';
@@ -46,6 +47,15 @@ function App() {
   const notifMenuRef = useRef(null);
   const notifUnread = useMemo(() => appNotifs.filter(n => !n.read).length, [appNotifs]);
   const [profileModalUserId, setProfileModalUserId] = useState(null);
+  // LiveKit audio (unused for proximity mic)
+  // const lkRoomRef = useRef(null);
+  // const [isAudioConnected, setIsAudioConnected] = useState(false);
+  // Proximity voice (mic via WebRTC P2P)
+  const [isMicOn, setIsMicOn] = useState(false);
+  const localMicStreamRef = useRef(null);
+  const speakerPeerConnsRef = useRef(new Map()); // as speaker: listenerSocketId -> RTCPeerConnection
+  const listenerPeerConnsRef = useRef(new Map()); // as listener: speakerSocketId -> RTCPeerConnection
+  const [activeSpeakerIds, setActiveSpeakerIds] = useState([]);
 
   function playNotificationSound() {
     try {
@@ -307,6 +317,33 @@ function App() {
     }
   }
 
+  // Mic: start/stop and proximity auto-subscribe
+  async function toggleMic() {
+    if (isMicOn) {
+      try { localMicStreamRef.current?.getTracks()?.forEach(t => t.stop()); } catch {}
+      localMicStreamRef.current = null;
+      setIsMicOn(false);
+      try { socket?.emit('stop-audio'); } catch {}
+      // Close all listener peer connections
+      for (const [, pc] of speakerPeerConnsRef.current) {
+        try { pc.close(); } catch {}
+      }
+      speakerPeerConnsRef.current.clear();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+      localMicStreamRef.current = stream;
+      setIsMicOn(true);
+      socket?.emit('start-audio');
+    } catch (e) {
+      addToast('Mic permission denied or unavailable.', 'error');
+      setIsMicOn(false);
+      localMicStreamRef.current = null;
+    }
+  }
+
   // Fetch account profile when token exists (name, avatar)
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -557,6 +594,147 @@ function App() {
     };
   }, [socket, users, isSharingScreen]);
 
+  // Socket: mic signaling (mirror of screen share but audio-only)
+  useEffect(() => {
+    if (!socket) return;
+
+    const onActive = ({ speakerIds }) => {
+      setActiveSpeakerIds(Array.isArray(speakerIds) ? speakerIds : []);
+    };
+    const onStarted = ({ speakerId }) => {
+      setActiveSpeakerIds(prev => Array.from(new Set([...prev, speakerId])));
+    };
+    const onStopped = ({ speakerId }) => {
+      setActiveSpeakerIds(prev => prev.filter(id => id !== speakerId));
+      const pc = listenerPeerConnsRef.current.get(speakerId);
+      if (pc) {
+        try { pc.close(); } catch {}
+        listenerPeerConnsRef.current.delete(speakerId);
+      }
+      const el = document.getElementById(`prox-audio-${speakerId}`);
+      if (el && el.parentElement) {
+        try { el.srcObject = null; el.remove(); } catch {}
+      }
+    };
+
+    const onSubscribe = async ({ from }) => {
+      // I am speaker, listener requests subscription
+      if (!isMicOn || !localMicStreamRef.current) return;
+      if (speakerPeerConnsRef.current.has(from)) {
+        try { speakerPeerConnsRef.current.get(from).close(); } catch {}
+        speakerPeerConnsRef.current.delete(from);
+      }
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      speakerPeerConnsRef.current.set(from, pc);
+      for (const track of localMicStreamRef.current.getTracks()) {
+        try { track.contentHint = 'speech'; } catch {}
+        pc.addTrack(track, localMicStreamRef.current);
+      }
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate) socket.emit('audio-ice-candidate', { to: from, candidate: ev.candidate });
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+          try { pc.close(); } catch {}
+          speakerPeerConnsRef.current.delete(from);
+        }
+      };
+      try {
+        const offer = await pc.createOffer({ offerToReceiveAudio: false, offerToReceiveVideo: false });
+        await pc.setLocalDescription(offer);
+        socket.emit('audio-webrtc-offer', { to: from, sdp: pc.localDescription });
+      } catch (e) {
+        try { pc.close(); } catch {}
+        speakerPeerConnsRef.current.delete(from);
+      }
+    };
+
+    const onUnsubscribe = ({ from }) => {
+      const pc = speakerPeerConnsRef.current.get(from);
+      if (pc) {
+        try { pc.close(); } catch {}
+        speakerPeerConnsRef.current.delete(from);
+      }
+    };
+
+    const onOffer = async ({ from, sdp }) => {
+      // I am listener receiving offer from speaker
+      let pc = listenerPeerConnsRef.current.get(from);
+      if (pc) {
+        try { pc.close(); } catch {}
+        listenerPeerConnsRef.current.delete(from);
+      }
+      pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      listenerPeerConnsRef.current.set(from, pc);
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate) socket.emit('audio-ice-candidate', { to: from, candidate: ev.candidate });
+      };
+      pc.ontrack = (ev) => {
+        const [stream] = ev.streams;
+        // Attach to hidden audio element
+        const elId = `prox-audio-${from}`;
+        let el = document.getElementById(elId);
+        if (!el) {
+          el = document.createElement('audio');
+          el.id = elId;
+          el.autoplay = true;
+          el.playsInline = true;
+          el.style.display = 'none';
+          document.body.appendChild(el);
+        }
+        try { el.srcObject = stream; el.play?.().catch(() => {}); } catch {}
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+          try { pc.close(); } catch {}
+          listenerPeerConnsRef.current.delete(from);
+        }
+      };
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('audio-webrtc-answer', { to: from, sdp: pc.localDescription });
+      } catch (e) {
+        try { pc.close(); } catch {}
+        listenerPeerConnsRef.current.delete(from);
+      }
+    };
+
+    const onAnswer = async ({ from, sdp }) => {
+      const pc = speakerPeerConnsRef.current.get(from);
+      if (!pc) return;
+      try { await pc.setRemoteDescription(new RTCSessionDescription(sdp)); } catch {}
+    };
+
+    const onIce = async ({ from, candidate }) => {
+      let pc = speakerPeerConnsRef.current.get(from);
+      if (!pc) pc = listenerPeerConnsRef.current.get(from);
+      if (!pc) return;
+      try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    };
+
+    socket.on('audio-active', onActive);
+    socket.on('audio-started', onStarted);
+    socket.on('audio-stopped', onStopped);
+    socket.on('audio-subscribe', onSubscribe);
+    socket.on('audio-unsubscribe', onUnsubscribe);
+    socket.on('audio-webrtc-offer', onOffer);
+    socket.on('audio-webrtc-answer', onAnswer);
+    socket.on('audio-ice-candidate', onIce);
+
+    return () => {
+      socket.off('audio-active', onActive);
+      socket.off('audio-started', onStarted);
+      socket.off('audio-stopped', onStopped);
+      socket.off('audio-subscribe', onSubscribe);
+      socket.off('audio-unsubscribe', onUnsubscribe);
+      socket.off('audio-webrtc-offer', onOffer);
+      socket.off('audio-webrtc-answer', onAnswer);
+      socket.off('audio-ice-candidate', onIce);
+    };
+  }, [socket, users, isMicOn]);
+
   // Proximity-based auto subscribe/unsubscribe
   useEffect(() => {
     if (!socket || !user) return;
@@ -586,6 +764,41 @@ function App() {
       }
     }
   }, [eligibleSharerIds, socket, user, users]);
+
+  // Proximity-based auto subscribe/unsubscribe for mic
+  useEffect(() => {
+    if (!socket || !user) return;
+    const set = new Set(activeSpeakerIds);
+    const subscribed = new Set(Array.from(listenerPeerConnsRef.current.keys()));
+
+    // Determine which speakers are within radius
+    const eligible = [];
+    for (const speakerId of set) {
+      const u = users.find(x => x.id === speakerId && x.room === user.room);
+      if (!u) continue;
+      const dx = (u.position?.x || 0) - (user.position?.x || 0);
+      const dy = (u.position?.y || 0) - (user.position?.y || 0);
+      const d = Math.hypot(dx, dy);
+      if (d <= PROXIMITY_RADIUS) eligible.push(speakerId);
+    }
+
+    // Subscribe to new eligible speakers
+    for (const speakerId of eligible) {
+      if (!subscribed.has(speakerId)) {
+        try { socket.emit('audio-subscribe', { speakerId }); } catch {}
+      }
+    }
+
+    // Unsubscribe from those no longer eligible
+    for (const speakerId of subscribed) {
+      if (!eligible.includes(speakerId)) {
+        try { socket.emit('audio-unsubscribe', { speakerId }); } catch {}
+        const pc = listenerPeerConnsRef.current.get(speakerId);
+        if (pc) { try { pc.close(); } catch {} }
+        listenerPeerConnsRef.current.delete(speakerId);
+      }
+    }
+  }, [socket, activeSpeakerIds, users, user]);
 
   // Room messages listener disabled in DM-first UI
 
@@ -713,6 +926,8 @@ function App() {
       }
     }
   };
+
+  // LiveKit group voice (not used for proximity mic now) — placeholder if needed later
 
   const sendWave = (toSocketId) => {
     try { socket?.emit('wave-send', { to: toSocketId }); } catch {}
@@ -1117,6 +1332,16 @@ function App() {
               )}
             </span>
             <span className="ss-pill-label">{isSharingScreen ? 'Stop Sharing' : 'Present Screen'}</span>
+          </button>
+          <button
+            className={`ss-pill ${isMicOn ? 'active' : ''}`}
+            aria-label={isMicOn ? 'Mic off' : 'Mic on'}
+            title={isMicOn ? 'Turn off mic' : 'Turn on mic'}
+            onClick={toggleMic}
+          >
+            <span className={`ss-indicator ${isMicOn ? 'on' : ''}`} aria-hidden="true" />
+            <span className="ss-pill-icon" aria-hidden="true">🎙️</span>
+            <span className="ss-pill-label">{isMicOn ? 'Mic On' : 'Mic Off'}</span>
           </button>
         </div>
       )}
