@@ -1964,9 +1964,28 @@ function App() {
               })}
             </div>
           )}
-          <div className="ss-topbar">
-            <div />
-            <button className="ss-btn" onClick={() => { const id = fullScreenVideoId; setFullScreenVideoId(null); if (id) { dockVideoTileToAnchor(id); addMinimizedVideo(id); } }}>Minimize</button>
+          <div className="ss-toolbar">
+            <button
+              className="ss-btn"
+              onClick={() => {
+                const id = fullScreenVideoId;
+                setFullScreenVideoId(null);
+                if (id) { dockVideoTileToAnchor(id); addMinimizedVideo(id); }
+              }}
+              title="Minimize"
+            >⤡</button>
+            {activeBroadcasterIds.length > 1 && (
+              <button
+                className="ss-btn primary"
+                onClick={() => {
+                  const ids = activeBroadcasterIds;
+                  const idx = ids.indexOf(fullScreenVideoId);
+                  const next = ids[(idx + 1 + ids.length) % ids.length];
+                  setFullScreenVideoId(next);
+                }}
+                title="Switch Video"
+              >⇄</button>
+            )}
           </div>
         </div>
       )}
