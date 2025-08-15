@@ -1366,7 +1366,7 @@ function App() {
             user={user}
             onMove={handleMove}
             isCurrentUser={true}
-            showRadius={true}
+            showRadius={false}
             radiusTiles={PROXIMITY_RADIUS}
             isSharingActive={isSharingScreen}
           />
