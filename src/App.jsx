@@ -56,6 +56,12 @@ function App() {
   const speakerPeerConnsRef = useRef(new Map()); // as speaker: listenerSocketId -> RTCPeerConnection
   const listenerPeerConnsRef = useRef(new Map()); // as listener: speakerSocketId -> RTCPeerConnection
   const [activeSpeakerIds, setActiveSpeakerIds] = useState([]);
+  // Proximity camera video (P2P)
+  const [isCamOn, setIsCamOn] = useState(false);
+  const localCamStreamRef = useRef(null);
+  const videoBroadcasterPCsRef = useRef(new Map()); // as broadcaster: viewerSocketId -> RTCPeerConnection
+  const videoViewerPCsRef = useRef(new Map()); // as viewer: broadcasterSocketId -> RTCPeerConnection
+  const [activeBroadcasterIds, setActiveBroadcasterIds] = useState([]);
 
   function playNotificationSound() {
     try {
@@ -341,6 +347,31 @@ function App() {
       addToast('Mic permission denied or unavailable.', 'error');
       setIsMicOn(false);
       localMicStreamRef.current = null;
+    }
+  }
+
+  // Camera: start/stop
+  async function toggleCamera() {
+    if (isCamOn) {
+      try { localCamStreamRef.current?.getTracks()?.forEach(t => t.stop()); } catch {}
+      localCamStreamRef.current = null;
+      setIsCamOn(false);
+      try { socket?.emit('stop-video'); } catch {}
+      for (const [, pc] of videoBroadcasterPCsRef.current) {
+        try { pc.close(); } catch {}
+      }
+      videoBroadcasterPCsRef.current.clear();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 } }, audio: false });
+      localCamStreamRef.current = stream;
+      setIsCamOn(true);
+      socket?.emit('start-video');
+    } catch (e) {
+      addToast('Camera permission denied or unavailable.', 'error');
+      setIsCamOn(false);
+      localCamStreamRef.current = null;
     }
   }
 
@@ -735,6 +766,142 @@ function App() {
     };
   }, [socket, users, isMicOn]);
 
+  // Socket: camera signaling (video-only)
+  useEffect(() => {
+    if (!socket) return;
+
+    const onActive = ({ broadcasterIds }) => {
+      setActiveBroadcasterIds(Array.isArray(broadcasterIds) ? broadcasterIds : []);
+    };
+    const onStarted = ({ broadcasterId }) => {
+      setActiveBroadcasterIds(prev => Array.from(new Set([...prev, broadcasterId])));
+    };
+    const onStopped = ({ broadcasterId }) => {
+      setActiveBroadcasterIds(prev => prev.filter(id => id !== broadcasterId));
+      const pc = videoViewerPCsRef.current.get(broadcasterId);
+      if (pc) { try { pc.close(); } catch {} videoViewerPCsRef.current.delete(broadcasterId); }
+      const el = document.getElementById(`prox-video-${broadcasterId}`);
+      if (el && el.parentElement) {
+        try { el.srcObject = null; el.remove(); } catch {}
+      }
+    };
+
+    const onSubscribe = async ({ from }) => {
+      // I am broadcaster, viewer requests subscription
+      if (!isCamOn || !localCamStreamRef.current) return;
+      if (videoBroadcasterPCsRef.current.has(from)) {
+        try { videoBroadcasterPCsRef.current.get(from).close(); } catch {}
+        videoBroadcasterPCsRef.current.delete(from);
+      }
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      videoBroadcasterPCsRef.current.set(from, pc);
+      for (const track of localCamStreamRef.current.getTracks()) {
+        try { track.contentHint = track.kind === 'video' ? 'motion' : undefined; } catch {}
+        pc.addTrack(track, localCamStreamRef.current);
+      }
+      pc.onicecandidate = (ev) => { if (ev.candidate) socket.emit('video-ice-candidate', { to: from, candidate: ev.candidate }); };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+          try { pc.close(); } catch {}
+          videoBroadcasterPCsRef.current.delete(from);
+        }
+      };
+      try {
+        const offer = await pc.createOffer({ offerToReceiveAudio: false, offerToReceiveVideo: false });
+        await pc.setLocalDescription(offer);
+        socket.emit('video-webrtc-offer', { to: from, sdp: pc.localDescription });
+      } catch (e) {
+        try { pc.close(); } catch {}
+        videoBroadcasterPCsRef.current.delete(from);
+      }
+    };
+
+    const onUnsubscribe = ({ from }) => {
+      const pc = videoBroadcasterPCsRef.current.get(from);
+      if (pc) { try { pc.close(); } catch {} videoBroadcasterPCsRef.current.delete(from); }
+    };
+
+    const onOffer = async ({ from, sdp }) => {
+      // I am viewer
+      let pc = videoViewerPCsRef.current.get(from);
+      if (pc) { try { pc.close(); } catch {} videoViewerPCsRef.current.delete(from); }
+      pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      videoViewerPCsRef.current.set(from, pc);
+      pc.onicecandidate = (ev) => { if (ev.candidate) socket.emit('video-ice-candidate', { to: from, candidate: ev.candidate }); };
+      pc.ontrack = (ev) => {
+        const [stream] = ev.streams;
+        const elId = `prox-video-${from}`;
+        let el = document.getElementById(elId);
+        if (!el) {
+          el = document.createElement('video');
+          el.id = elId;
+          el.autoplay = true;
+          el.playsInline = true;
+          el.muted = true; // avoid echo since mic is separate
+          el.style.position = 'fixed';
+          el.style.right = '12px';
+          el.style.bottom = '12px';
+          el.style.width = '180px';
+          el.style.height = '120px';
+          el.style.background = '#000';
+          el.style.border = '1px solid rgba(255,255,255,0.15)';
+          el.style.borderRadius = '10px';
+          el.style.zIndex = '12510';
+          document.body.appendChild(el);
+        }
+        try { el.srcObject = stream; el.play?.().catch(() => {}); } catch {}
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+          try { pc.close(); } catch {}
+          videoViewerPCsRef.current.delete(from);
+        }
+      };
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('video-webrtc-answer', { to: from, sdp: pc.localDescription });
+      } catch (e) {
+        try { pc.close(); } catch {}
+        videoViewerPCsRef.current.delete(from);
+      }
+    };
+
+    const onAnswer = async ({ from, sdp }) => {
+      const pc = videoBroadcasterPCsRef.current.get(from);
+      if (!pc) return;
+      try { await pc.setRemoteDescription(new RTCSessionDescription(sdp)); } catch {}
+    };
+
+    const onIce = async ({ from, candidate }) => {
+      let pc = videoBroadcasterPCsRef.current.get(from);
+      if (!pc) pc = videoViewerPCsRef.current.get(from);
+      if (!pc) return;
+      try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    };
+
+    socket.on('video-active', onActive);
+    socket.on('video-started', onStarted);
+    socket.on('video-stopped', onStopped);
+    socket.on('video-subscribe', onSubscribe);
+    socket.on('video-unsubscribe', onUnsubscribe);
+    socket.on('video-webrtc-offer', onOffer);
+    socket.on('video-webrtc-answer', onAnswer);
+    socket.on('video-ice-candidate', onIce);
+
+    return () => {
+      socket.off('video-active', onActive);
+      socket.off('video-started', onStarted);
+      socket.off('video-stopped', onStopped);
+      socket.off('video-subscribe', onSubscribe);
+      socket.off('video-unsubscribe', onUnsubscribe);
+      socket.off('video-webrtc-offer', onOffer);
+      socket.off('video-webrtc-answer', onAnswer);
+      socket.off('video-ice-candidate', onIce);
+    };
+  }, [socket, users, isCamOn]);
+
   // Proximity-based auto subscribe/unsubscribe
   useEffect(() => {
     if (!socket || !user) return;
@@ -799,6 +966,42 @@ function App() {
       }
     }
   }, [socket, activeSpeakerIds, users, user]);
+
+  // Proximity-based auto subscribe/unsubscribe for camera
+  useEffect(() => {
+    if (!socket || !user) return;
+    const set = new Set(activeBroadcasterIds);
+    const subscribed = new Set(Array.from(videoViewerPCsRef.current.keys()));
+
+    const eligible = [];
+    for (const broadcasterId of set) {
+      const u = users.find(x => x.id === broadcasterId && x.room === user.room);
+      if (!u) continue;
+      const dx = (u.position?.x || 0) - (user.position?.x || 0);
+      const dy = (u.position?.y || 0) - (user.position?.y || 0);
+      const d = Math.hypot(dx, dy);
+      if (d <= PROXIMITY_RADIUS) eligible.push(broadcasterId);
+    }
+
+    for (const broadcasterId of eligible) {
+      if (!subscribed.has(broadcasterId)) {
+        try { socket.emit('video-subscribe', { broadcasterId }); } catch {}
+      }
+    }
+
+    for (const broadcasterId of subscribed) {
+      if (!eligible.includes(broadcasterId)) {
+        try { socket.emit('video-unsubscribe', { broadcasterId }); } catch {}
+        const pc = videoViewerPCsRef.current.get(broadcasterId);
+        if (pc) { try { pc.close(); } catch {} }
+        videoViewerPCsRef.current.delete(broadcasterId);
+        const el = document.getElementById(`prox-video-${broadcasterId}`);
+        if (el && el.parentElement) {
+          try { el.srcObject = null; el.remove(); } catch {}
+        }
+      }
+    }
+  }, [socket, activeBroadcasterIds, users, user]);
 
   // Room messages listener disabled in DM-first UI
 
@@ -1342,6 +1545,16 @@ function App() {
             <span className={`ss-indicator ${isMicOn ? 'on' : ''}`} aria-hidden="true" />
             <span className="ss-pill-icon" aria-hidden="true">🎙️</span>
             <span className="ss-pill-label">{isMicOn ? 'Mic On' : 'Mic Off'}</span>
+          </button>
+          <button
+            className={`ss-pill ${isCamOn ? 'active' : ''}`}
+            aria-label={isCamOn ? 'Camera off' : 'Camera on'}
+            title={isCamOn ? 'Turn off camera' : 'Turn on camera'}
+            onClick={toggleCamera}
+          >
+            <span className={`ss-indicator ${isCamOn ? 'on' : ''}`} aria-hidden="true" />
+            <span className="ss-pill-icon" aria-hidden="true">📷</span>
+            <span className="ss-pill-label">{isCamOn ? 'Camera On' : 'Camera Off'}</span>
           </button>
         </div>
       )}

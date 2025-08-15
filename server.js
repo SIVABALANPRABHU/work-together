@@ -283,6 +283,8 @@ const connectedUsers = new Map();
 const activeScreenSharers = new Map();
 // Track active audio speakers by socket id -> { room, startedAt }
 const activeAudioSpeakers = new Map();
+// Track active video broadcasters by socket id -> { room, startedAt }
+const activeVideoBroadcasters = new Map();
 // Track watchers per sharer: sharerSocketId -> Set(viewerSocketId)
 const watchersBySharer = new Map();
 
@@ -359,6 +361,12 @@ io.on('connection', (socket) => {
       .filter(([sid, info]) => info.room === userData.room)
       .map(([sid]) => sid);
     socket.emit('audio-active', { speakerIds: roomSpeakers });
+
+    // Also send which users currently broadcasting camera in this room
+    const roomVideo = Array.from(activeVideoBroadcasters.entries())
+      .filter(([sid, info]) => info.room === userData.room)
+      .map(([sid]) => sid);
+    socket.emit('video-active', { broadcasterIds: roomVideo });
   });
 
   // Handle user movement
@@ -414,6 +422,15 @@ io.on('connection', (socket) => {
           // Update their audio room and notify new room that audio is active
           activeAudioSpeakers.set(socket.id, { room: data.room, startedAt: Date.now() });
           io.to(data.room).emit('audio-started', { speakerId: socket.id, name: user.name, avatar: user.avatar });
+        }
+
+        // If this user currently broadcasting camera, update their room and notify both rooms
+        if (activeVideoBroadcasters.has(socket.id)) {
+          if (oldRoom) {
+            io.to(oldRoom).emit('video-stopped', { broadcasterId: socket.id });
+          }
+          activeVideoBroadcasters.set(socket.id, { room: data.room, startedAt: Date.now() });
+          io.to(data.room).emit('video-started', { broadcasterId: socket.id, name: user.name, avatar: user.avatar });
         }
       } else {
         // Broadcast movement to current room
@@ -612,6 +629,53 @@ io.on('connection', (socket) => {
     io.to(to).emit('audio-ice-candidate', { from: socket.id, candidate });
   });
 
+  // --- Proximity camera video signaling (WebRTC over Socket.IO) ---
+  socket.on('start-video', () => {
+    const user = connectedUsers.get(socket.id);
+    if (!user) return;
+    activeVideoBroadcasters.set(socket.id, { room: user.room, startedAt: Date.now() });
+    io.to(user.room).emit('video-started', { broadcasterId: socket.id, name: user.name, avatar: user.avatar });
+  });
+
+  socket.on('stop-video', () => {
+    const info = activeVideoBroadcasters.get(socket.id);
+    if (!info) return;
+    activeVideoBroadcasters.delete(socket.id);
+    io.to(info.room).emit('video-stopped', { broadcasterId: socket.id });
+  });
+
+  socket.on('video-subscribe', ({ broadcasterId }) => {
+    if (!broadcasterId) return;
+    const broadcaster = connectedUsers.get(broadcasterId);
+    const viewer = connectedUsers.get(socket.id);
+    if (!broadcaster || !viewer) return;
+    if (broadcaster.room !== viewer.room) return;
+    const dx = (broadcaster.position?.x || 0) - (viewer.position?.x || 0);
+    const dy = (broadcaster.position?.y || 0) - (viewer.position?.y || 0);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const RADIUS = 3;
+    if (distance > RADIUS) return;
+    io.to(broadcasterId).emit('video-subscribe', { from: socket.id });
+  });
+
+  socket.on('video-unsubscribe', ({ broadcasterId }) => {
+    if (!broadcasterId) return;
+    io.to(broadcasterId).emit('video-unsubscribe', { from: socket.id });
+  });
+
+  socket.on('video-webrtc-offer', ({ to, sdp }) => {
+    if (!to || !sdp) return;
+    io.to(to).emit('video-webrtc-offer', { from: socket.id, sdp });
+  });
+  socket.on('video-webrtc-answer', ({ to, sdp }) => {
+    if (!to || !sdp) return;
+    io.to(to).emit('video-webrtc-answer', { from: socket.id, sdp });
+  });
+  socket.on('video-ice-candidate', ({ to, candidate }) => {
+    if (!to || !candidate) return;
+    io.to(to).emit('video-ice-candidate', { from: socket.id, candidate });
+  });
+
   // Wave feature: simple real-time notification
   socket.on('wave-send', ({ to }) => {
     if (!to) return;
@@ -670,6 +734,11 @@ io.on('connection', (socket) => {
       const infoA = activeAudioSpeakers.get(socket.id);
       activeAudioSpeakers.delete(socket.id);
       io.to(infoA.room).emit('audio-stopped', { speakerId: socket.id });
+    }
+    if (activeVideoBroadcasters.has(socket.id)) {
+      const infoV = activeVideoBroadcasters.get(socket.id);
+      activeVideoBroadcasters.delete(socket.id);
+      io.to(infoV.room).emit('video-stopped', { broadcasterId: socket.id });
     }
     // If they were a watcher, remove from all sets
     try {
