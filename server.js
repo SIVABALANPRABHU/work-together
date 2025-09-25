@@ -750,6 +750,11 @@ io.on('connection', (socket) => {
   });
 });
 
+// SPA fallback (must be after API routes and before server.listen)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

@@ -641,6 +641,28 @@
       "toAvatar": "🤖",
       "message": "hi",
       "timestamp": "2025-08-14T10:33:24.065Z"
+    },
+    {
+      "fromSocketId": "nIIlEPovz-f3hBJPAAAI",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754988674671_sa8m69",
+      "toName": "guru",
+      "toAvatar": "👧",
+      "message": "hi",
+      "timestamp": "2025-08-16T05:51:15.935Z"
+    },
+    {
+      "fromSocketId": "nIIlEPovz-f3hBJPAAAI",
+      "fromUserId": "u_1754985565053_bqwtnt",
+      "fromName": "Student",
+      "fromAvatar": "🤖",
+      "toUserId": "u_1754988674671_sa8m69",
+      "toName": "guru",
+      "toAvatar": "👧",
+      "message": "hi",
+      "timestamp": "2025-08-16T05:51:28.548Z"
     }
   ],
   "u_1754985565053_bqwtnt__u_1755103682656_wec76l": [
@@ -667,6 +689,41 @@
       "toAvatar": "👤",
       "message": "dd",
       "timestamp": "2025-08-14T10:42:10.047Z"
+    }
+  ],
+  "u_1755252559219_yvs9m5__u_1758784972929_t6kh8o": [
+    {
+      "fromSocketId": "m34NLzl42VbStCYxAAAF",
+      "fromUserId": "u_1758784972929_t6kh8o",
+      "fromName": "hariharan",
+      "fromAvatar": "👨",
+      "toUserId": "u_1755252559219_yvs9m5",
+      "toName": "rithu",
+      "toAvatar": "👩",
+      "message": "hi",
+      "timestamp": "2025-09-25T07:25:00.486Z"
+    },
+    {
+      "fromSocketId": "m34NLzl42VbStCYxAAAF",
+      "fromUserId": "u_1758784972929_t6kh8o",
+      "fromName": "hariharan",
+      "fromAvatar": "👨",
+      "toUserId": "u_1755252559219_yvs9m5",
+      "toName": "rithu",
+      "toAvatar": "👩",
+      "message": "how are you",
+      "timestamp": "2025-09-25T07:25:18.155Z"
+    },
+    {
+      "fromSocketId": "ISy6FpiMbnREcGrMAAAL",
+      "fromUserId": "u_1755252559219_yvs9m5",
+      "fromName": "rithu",
+      "fromAvatar": "👩",
+      "toUserId": "u_1758784972929_t6kh8o",
+      "toName": "hariharan",
+      "toAvatar": "👨",
+      "message": "yes",
+      "timestamp": "2025-09-25T07:25:29.133Z"
     }
   ]
 }

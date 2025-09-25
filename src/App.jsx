@@ -509,7 +509,7 @@ function App() {
       setSocket(null);
       return;
     }
-    const newSocket = io('http://localhost:5000', {
+    const newSocket = io(window.location.origin, {
       auth: { token }
     });
     setSocket(newSocket);

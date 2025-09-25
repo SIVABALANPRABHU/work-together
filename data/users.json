@@ -39,6 +39,14 @@
       "password_hash": "$2a$10$.Nl3uVzhLaG8gZmdINRLEuvvG.KwUNvjWv1.FZje0bAeY3ul0a/Tm",
       "avatar": "👩",
       "created_at": "2025-08-15T10:09:19.219Z"
+    },
+    {
+      "id": "u_1758784972929_t6kh8o",
+      "email": "hari@gmail.com",
+      "name": "hariharan",
+      "password_hash": "$2a$10$VXL6eBJwpEgD.xhAaLKw8O7PIycVMwKAOArk7IT3ThG5Qf0KPr/tu",
+      "avatar": "👨",
+      "created_at": "2025-09-25T07:22:52.929Z"
     }
   ]
 }
