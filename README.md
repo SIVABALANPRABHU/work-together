@@ -1,6 +1,6 @@
-# Vorko - Gather Clone
+# Vorko
 
-A virtual office application similar to Gather, featuring movable characters, real-time communication, and multiple office environments.
+A virtual office application featuring movable characters, real-time communication, and multiple office environments.
 
 ## Features
 
