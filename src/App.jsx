@@ -1338,7 +1338,7 @@ function App() {
           transform: 'translate(-50%, -50%)',
           textAlign: 'center'
         }}>
-          <h1 style={{ color: '#64ffda', marginBottom: '20px' }}>Virtual Office</h1>
+          <h1 style={{ color: '#64ffda', marginBottom: '20px' }}>Vorko</h1>
           <p style={{ color: '#b0b0b0' }}>Connecting to server...</p>
         </div>
       </div>
