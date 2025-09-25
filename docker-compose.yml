@@ -1,10 +1,11 @@
+version: "3.9"
 services:
   app:
     build: .
     image: work-together:latest
     container_name: work-together
     ports:
-      - "5000:5000"
+      - "5001:5000"   # <--- change host port so it won't conflict with LMS
     environment:
       - NODE_ENV=production
       - PORT=5000
