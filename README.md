@@ -125,6 +125,48 @@ npm run build
 2. Deploy the `dist` folder to your hosting platform
 3. Ensure the backend URL is correctly configured
 
+## Run with Docker (simple)
+
+This is the easiest way to run everything (API + frontend) together.
+
+- **Prerequisite**: Install Docker Desktop and make sure it is running.
+
+- **Start the app**
+  ```bash
+  docker compose up -d --build
+  ```
+  Then open `http://localhost:5000` in your browser.
+
+- **Stop the app**
+  ```bash
+  docker compose down
+  ```
+
+- **See logs**
+  ```bash
+  docker compose logs -f
+  ```
+
+- **Environment variables**
+  You can set these in your shell or in a `.env` file next to `docker-compose.yml` (Docker will pick them up automatically):
+  - `JWT_SECRET` (required): A long random string.
+  - `LIVEKIT_URL` (optional): e.g. `wss://your.livekit.cloud`.
+  - `LIVEKIT_API_KEY` (optional)
+  - `LIVEKIT_API_SECRET` (optional)
+
+- **Data is persisted**
+  Chat and user data are stored in the `data/` folder on your computer (mapped into the container). You won’t lose data when you stop/start the container.
+
+- **Rebuild after code changes**
+  ```bash
+  docker compose up -d --build
+  ```
+
+- **Troubleshooting**
+  - Make sure Docker Desktop is running.
+  - If port 5000 is busy, stop whatever is using it or change the published port in `docker-compose.yml` (left side of `5000:5000`).
+  - If you see a warning about `version` in `docker-compose.yml`, you can ignore it or remove the first line that starts with `version:`.
+
 ## Contributing
 
 1. Fork the repository
