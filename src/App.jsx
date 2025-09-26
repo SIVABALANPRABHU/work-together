@@ -1338,7 +1338,7 @@ function App() {
           transform: 'translate(-50%, -50%)',
           textAlign: 'center'
         }}>
-          <h1 style={{ color: '#64ffda', marginBottom: '20px' }}>Virtual Office</h1>
+          <h1 style={{ color: '#64ffda', marginBottom: '20px' }}>Vorko</h1>
           <p style={{ color: '#b0b0b0' }}>Connecting to server...</p>
         </div>
       </div>
@@ -1482,7 +1482,7 @@ function App() {
         isConnected={isConnected}
       />
 
-      {/* Nearby users top bar (Gather-like) with scroll */}
+      {/* Nearby users top bar with scroll */}
       {user && (nearbyUsers.length > 0 || (isSharingScreen && minimizedSharerIds.includes(user.id)) || (isCamOn && videoMinimizedIds.includes(user.id))) && !fullScreenSharerId && !fullScreenVideoId && (
         <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, padding: 8, borderRadius: 12, background: 'rgba(17,17,17,0.6)', backdropFilter: 'blur(6px)', zIndex: 12500, boxShadow: '0 10px 28px rgba(0,0,0,0.35)' }}>
           <button title="Scroll left" aria-label="Scroll left" onClick={() => { try { document.getElementById('nearby-scroll')?.scrollBy({ left: -320, behavior: 'smooth' }); } catch {} }} style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 8, width: 28, height: 62, cursor: 'pointer' }}>‹</button>

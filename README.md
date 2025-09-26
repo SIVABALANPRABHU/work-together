@@ -1,6 +1,6 @@
-# Virtual Office - Gather Clone
+# Vorko
 
-A virtual office application similar to Gather, featuring movable characters, real-time communication, and multiple office environments.
+A virtual office application featuring movable characters, real-time communication, and multiple office environments.
 
 ## Features
 
@@ -49,7 +49,7 @@ A virtual office application similar to Gather, featuring movable characters, re
 
 1. Open your browser and navigate to `http://localhost:3000`
 2. Enter your name and choose an avatar
-3. Click "Enter Office" to join the virtual office
+3. Click "Enter Office" to join Vorko
 
 ### Controls
 
@@ -185,4 +185,4 @@ For issues or questions, please open an issue in the repository or contact the d
 
 ---
 
-**Enjoy your virtual office experience! 🏢✨**
+**Enjoy Vorko! 🏢✨**

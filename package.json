@@ -1,7 +1,7 @@
 {
-  "name": "virtual-office",
+  "name": "vorko",
   "version": "1.0.0",
-  "description": "A virtual office application similar to Gather with movable characters and real office environments",
+  "description": "Vorko — a virtual office with movable characters and real-time collaboration",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
@@ -26,8 +26,8 @@
     "vite": "^4.4.9"
   },
   "keywords": [
+    "vorko",
     "virtual-office",
-    "gather-clone",
     "remote-work",
     "collaboration"
   ],
