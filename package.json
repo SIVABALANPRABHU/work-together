@@ -1,0 +1,36 @@
+{
+  "name": "vorko",
+  "version": "1.0.0",
+  "description": "Vorko — a virtual office with movable characters and real-time collaboration",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "livekit-client": "^2.15.4",
+    "livekit-server-sdk": "^2.13.2",
+    "socket.io": "^4.7.2",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vite": "^4.4.9"
+  },
+  "keywords": [
+    "vorko",
+    "virtual-office",
+    "remote-work",
+    "collaboration"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
